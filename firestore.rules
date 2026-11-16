@@ -1,0 +1,639 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global safety net: default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Global Helpers ---
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isBootstrappedAdmin() {
+      return isVerifiedUser() && request.auth.token.email == 'cprmedicalacademy@gmail.com';
+    }
+
+    function isAdmin() {
+      return isBootstrappedAdmin() || (
+        isVerifiedUser() &&
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.active == true
+      );
+    }
+
+    function adminRole() {
+      return isBootstrappedAdmin()
+        ? 'super_admin'
+        : get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role;
+    }
+
+    function isSuperAdmin() {
+      return isAdmin() && adminRole() == 'super_admin';
+    }
+
+    function canManageExamsAndBatches() {
+      return isAdmin() && adminRole() in ['super_admin', 'admin'];
+    }
+
+    function canEditStudents() {
+      return isAdmin() && adminRole() in ['super_admin', 'admin', 'verifier'];
+    }
+
+    // --- Validation Helpers ---
+    function isValidVerificationStatus(s) {
+      return s in [
+        'Submitted',
+        'Under Review',
+        'Payment Due',
+        'Payment Verified',
+        'Approved',
+        'WhatsApp Group Added',
+        'Rejected / Contact Office'
+      ];
+    }
+
+    function isValidPaymentStatus(s) {
+      return s in ['Pending', 'Due', 'Partially Paid', 'Fully Paid', 'Verified'];
+    }
+
+    function isValidGroupStatus(s) {
+      return s in ['Not Added', 'Eligible to Add', 'Added', 'Contact Needed'];
+    }
+
+    function isValidRegLock(data) {
+      return data.keys().hasAll(['regKey', 'createdAt']) &&
+        data.keys().hasOnly(['regKey', 'createdAt']) &&
+        data.regKey is string && data.regKey.size() >= 3 && data.regKey.size() <= 40 &&
+        data.regKey.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidStudent(data) {
+      return data.keys().hasAll([
+        'applicationId', 'fullName', 'bcsRegNo', 'regKey', 'whatsappNumber',
+        'batchId', 'batchName', 'consentAccepted', 'verificationStatus',
+        'paymentStatus', 'groupStatus', 'lookupHash', 'verificationCodeMasked',
+        'adminNotes', 'publicRemark', 'createdAt', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'applicationId', 'fullName', 'bcsRegNo', 'regKey', 'whatsappNumber',
+        'batchId', 'batchName', 'consentAccepted', 'verificationStatus',
+        'paymentStatus', 'groupStatus', 'lookupHash', 'verificationCodeMasked',
+        'adminNotes', 'publicRemark', 'createdAt', 'updatedAt'
+      ]) &&
+      data.applicationId is string && data.applicationId.size() >= 6 && data.applicationId.size() <= 40 &&
+      data.applicationId.matches('^[A-Z0-9\\-]+$') &&
+      data.fullName is string && data.fullName.size() >= 2 && data.fullName.size() <= 140 &&
+      data.bcsRegNo is string && data.bcsRegNo.size() >= 3 && data.bcsRegNo.size() <= 40 &&
+      data.regKey is string && data.regKey.size() >= 3 && data.regKey.size() <= 40 &&
+      data.regKey.matches('^[a-zA-Z0-9_\\-]+$') &&
+      data.whatsappNumber is string && data.whatsappNumber.size() >= 8 && data.whatsappNumber.size() <= 24 &&
+      data.batchId is string && data.batchId.size() >= 1 && data.batchId.size() <= 80 &&
+      data.batchId.matches('^[a-zA-Z0-9_\\-]+$') &&
+      data.batchName is string && data.batchName.size() >= 2 && data.batchName.size() <= 120 &&
+      data.consentAccepted is bool && data.consentAccepted == true &&
+      isValidVerificationStatus(data.verificationStatus) &&
+      isValidPaymentStatus(data.paymentStatus) &&
+      isValidGroupStatus(data.groupStatus) &&
+      data.lookupHash is string && data.lookupHash.size() == 64 &&
+      data.lookupHash.matches('^[a-f0-9]{64}$') &&
+      data.verificationCodeMasked is string && data.verificationCodeMasked.size() >= 4 && data.verificationCodeMasked.size() <= 24 &&
+      data.adminNotes is string && data.adminNotes.size() <= 1000 &&
+      data.publicRemark is string && data.publicRemark.size() <= 500 &&
+      data.createdAt is timestamp &&
+      data.updatedAt is timestamp;
+    }
+
+    function isValidStatusToken(data) {
+      return data.keys().hasAll([
+        'studentId', 'applicationId', 'studentName', 'bcsRegNoMasked',
+        'batchName', 'verificationStatus', 'paymentStatus', 'groupStatus',
+        'publicRemark', 'portalAccessKey', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'studentId', 'applicationId', 'studentName', 'bcsRegNoMasked',
+        'batchName', 'verificationStatus', 'paymentStatus', 'groupStatus',
+        'publicRemark', 'portalAccessKey', 'updatedAt'
+      ]) &&
+      isValidId(data.studentId) &&
+      data.applicationId is string && data.applicationId.size() >= 6 && data.applicationId.size() <= 40 &&
+      data.studentName is string && data.studentName.size() >= 2 && data.studentName.size() <= 140 &&
+      data.bcsRegNoMasked is string && data.bcsRegNoMasked.size() >= 3 && data.bcsRegNoMasked.size() <= 40 &&
+      data.batchName is string && data.batchName.size() >= 2 && data.batchName.size() <= 120 &&
+      isValidVerificationStatus(data.verificationStatus) &&
+      isValidPaymentStatus(data.paymentStatus) &&
+      isValidGroupStatus(data.groupStatus) &&
+      data.publicRemark is string && data.publicRemark.size() <= 500 &&
+      data.portalAccessKey is string && data.portalAccessKey.size() <= 64 &&
+      data.updatedAt is timestamp;
+    }
+
+    function isValidUpdateRequest(data) {
+      return data.keys().hasAll([
+        'lookupHash', 'bcsRegNo', 'requestedFullName', 'requestedWhatsapp',
+        'requestedBatchName', 'note', 'status', 'createdAt', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'lookupHash', 'bcsRegNo', 'requestedFullName', 'requestedWhatsapp',
+        'requestedBatchName', 'note', 'status', 'createdAt', 'updatedAt'
+      ]) &&
+      data.lookupHash is string && data.lookupHash.size() == 64 && data.lookupHash.matches('^[a-f0-9]{64}$') &&
+      data.bcsRegNo is string && data.bcsRegNo.size() >= 3 && data.bcsRegNo.size() <= 40 &&
+      data.requestedFullName is string && data.requestedFullName.size() >= 2 && data.requestedFullName.size() <= 140 &&
+      data.requestedWhatsapp is string && data.requestedWhatsapp.size() >= 8 && data.requestedWhatsapp.size() <= 24 &&
+      data.requestedBatchName is string && data.requestedBatchName.size() >= 2 && data.requestedBatchName.size() <= 120 &&
+      data.note is string && data.note.size() <= 500 &&
+      data.status in ['Pending', 'Resolved', 'Dismissed'] &&
+      data.createdAt is timestamp &&
+      data.updatedAt is timestamp;
+    }
+
+    function isValidBatch(data) {
+      return data.keys().hasAll(['name', 'code', 'description', 'isActive', 'sortOrder', 'updatedAt']) &&
+        data.keys().hasOnly(['name', 'code', 'description', 'isActive', 'sortOrder', 'updatedAt']) &&
+        data.name is string && data.name.size() >= 2 && data.name.size() <= 120 &&
+        data.code is string && data.code.size() >= 2 && data.code.size() <= 32 &&
+        data.description is string && data.description.size() <= 400 &&
+        data.isActive is bool &&
+        data.sortOrder is number &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidAdminDoc(data) {
+      return data.keys().hasAll(['uid', 'email', 'displayName', 'role', 'active', 'inviteId', 'updatedAt']) &&
+        data.keys().hasOnly(['uid', 'email', 'displayName', 'role', 'active', 'inviteId', 'updatedAt']) &&
+        isValidId(data.uid) &&
+        data.email is string && data.email.size() >= 5 && data.email.size() <= 160 &&
+        data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 120 &&
+        data.role in ['super_admin', 'admin', 'verifier', 'viewer'] &&
+        data.active is bool &&
+        data.inviteId is string && data.inviteId.size() <= 128 &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidAdminInvite(data) {
+      return data.keys().hasAll(['email', 'displayName', 'role', 'active', 'invitedBy', 'updatedAt']) &&
+        data.keys().hasOnly(['email', 'displayName', 'role', 'active', 'invitedBy', 'updatedAt']) &&
+        data.email is string && data.email.size() >= 5 && data.email.size() <= 160 &&
+        data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 120 &&
+        data.role in ['super_admin', 'admin', 'verifier', 'viewer'] &&
+        data.active is bool &&
+        data.invitedBy is string && data.invitedBy.size() <= 160 &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidPaymentRecord(data) {
+      return data.keys().hasAll([
+        'studentId', 'applicationId', 'studentName', 'bcsRegNo',
+        'previousStatus', 'newStatus', 'amountPaid', 'amountDue',
+        'referenceNote', 'verifiedByEmail', 'createdAt'
+      ]) &&
+      data.keys().hasOnly([
+        'studentId', 'applicationId', 'studentName', 'bcsRegNo',
+        'previousStatus', 'newStatus', 'amountPaid', 'amountDue',
+        'referenceNote', 'verifiedByEmail', 'createdAt'
+      ]) &&
+      isValidId(data.studentId) &&
+      data.applicationId is string && data.applicationId.size() <= 40 &&
+      data.studentName is string && data.studentName.size() <= 140 &&
+      data.bcsRegNo is string && data.bcsRegNo.size() <= 40 &&
+      isValidPaymentStatus(data.previousStatus) &&
+      isValidPaymentStatus(data.newStatus) &&
+      data.amountPaid is number && data.amountPaid >= 0 &&
+      data.amountDue is number && data.amountDue >= 0 &&
+      data.referenceNote is string && data.referenceNote.size() <= 500 &&
+      data.verifiedByEmail is string && data.verifiedByEmail.size() <= 160 &&
+      data.createdAt is timestamp;
+    }
+
+    function isValidVerificationHistory(data) {
+      return data.keys().hasAll(['studentId', 'status', 'note', 'actorType', 'actorEmail', 'createdAt']) &&
+        data.keys().hasOnly(['studentId', 'status', 'note', 'actorType', 'actorEmail', 'createdAt']) &&
+        isValidId(data.studentId) &&
+        data.status is string && data.status.size() >= 2 && data.status.size() <= 60 &&
+        data.note is string && data.note.size() <= 500 &&
+        data.actorType in ['student', 'admin'] &&
+        data.actorEmail is string && data.actorEmail.size() <= 160 &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidWhatsAppRecord(data) {
+      return data.keys().hasAll([
+        'studentId', 'studentName', 'bcsRegNo', 'previousGroupStatus',
+        'newGroupStatus', 'note', 'updatedByEmail', 'createdAt'
+      ]) &&
+      data.keys().hasOnly([
+        'studentId', 'studentName', 'bcsRegNo', 'previousGroupStatus',
+        'newGroupStatus', 'note', 'updatedByEmail', 'createdAt'
+      ]) &&
+      isValidId(data.studentId) &&
+      data.studentName is string && data.studentName.size() <= 140 &&
+      data.bcsRegNo is string && data.bcsRegNo.size() <= 40 &&
+      isValidGroupStatus(data.previousGroupStatus) &&
+      isValidGroupStatus(data.newGroupStatus) &&
+      data.note is string && data.note.size() <= 500 &&
+      data.updatedByEmail is string && data.updatedByEmail.size() <= 160 &&
+      data.createdAt is timestamp;
+    }
+
+    function isValidExamNotice(data) {
+      return data.keys().hasAll([
+        'title', 'category', 'batchName', 'examDate', 'summary',
+        'attachmentName', 'attachmentUrl', 'visibility', 'isPublished',
+        'updatedByEmail', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'title', 'category', 'batchName', 'examDate', 'summary',
+        'attachmentName', 'attachmentUrl', 'visibility', 'isPublished',
+        'updatedByEmail', 'updatedAt'
+      ]) &&
+      data.title is string && data.title.size() >= 2 && data.title.size() <= 200 &&
+      data.category in ['Subject Final', 'Grand Mock', 'Exam Routine', 'General Notice'] &&
+      data.batchName is string && data.batchName.size() <= 120 &&
+      data.examDate is string && data.examDate.size() <= 60 &&
+      data.summary is string && data.summary.size() <= 2000 &&
+      data.attachmentName is string && data.attachmentName.size() <= 180 &&
+      data.attachmentUrl is string && data.attachmentUrl.size() <= 450000 &&
+      data.visibility in ['public', 'approved_only'] &&
+      data.isPublished is bool &&
+      data.updatedByEmail is string && data.updatedByEmail.size() <= 160 &&
+      data.updatedAt is timestamp;
+    }
+
+    function isValidExamResult(data) {
+      return data.keys().hasAll([
+        'title', 'examType', 'batchName', 'examDate', 'summary',
+        'fileName', 'fileDataUrl', 'parsedCsvRows', 'isPublished',
+        'publishedByEmail', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'title', 'examType', 'batchName', 'examDate', 'summary',
+        'fileName', 'fileDataUrl', 'parsedCsvRows', 'isPublished',
+        'publishedByEmail', 'updatedAt'
+      ]) &&
+      data.title is string && data.title.size() >= 2 && data.title.size() <= 200 &&
+      data.examType in ['Subject Final Examination', 'Grand Mock Examination'] &&
+      data.batchName is string && data.batchName.size() <= 120 &&
+      data.examDate is string && data.examDate.size() <= 60 &&
+      data.summary is string && data.summary.size() <= 1000 &&
+      data.fileName is string && data.fileName.size() <= 180 &&
+      data.fileDataUrl is string && data.fileDataUrl.size() <= 450000 &&
+      data.parsedCsvRows is string && data.parsedCsvRows.size() <= 250000 &&
+      data.isPublished is bool &&
+      data.publishedByEmail is string && data.publishedByEmail.size() <= 160 &&
+      data.updatedAt is timestamp;
+    }
+
+    function isValidAuditLog(data) {
+      return data.keys().hasAll([
+        'action', 'targetType', 'targetId', 'targetLabel', 'details',
+        'actorUid', 'actorEmail', 'createdAt'
+      ]) &&
+      data.keys().hasOnly([
+        'action', 'targetType', 'targetId', 'targetLabel', 'details',
+        'actorUid', 'actorEmail', 'createdAt'
+      ]) &&
+      data.action is string && data.action.size() >= 2 && data.action.size() <= 120 &&
+      data.targetType is string && data.targetType.size() >= 2 && data.targetType.size() <= 60 &&
+      data.targetId is string && data.targetId.size() <= 128 &&
+      data.targetLabel is string && data.targetLabel.size() <= 180 &&
+      data.details is string && data.details.size() <= 1000 &&
+      data.actorUid is string && data.actorUid == request.auth.uid &&
+      data.actorEmail is string && data.actorEmail.size() <= 160 &&
+      data.createdAt is timestamp;
+    }
+
+    function isValidAcademySettings(data) {
+      return data.keys().hasAll([
+        'academyName', 'tagline', 'logoUrl', 'contactPhone', 'officeWhatsapp',
+        'contactEmail', 'officeAddress', 'officeHours', 'banglaInstruction',
+        'banglaNotice', 'privacyPolicy', 'termsText', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'academyName', 'tagline', 'logoUrl', 'contactPhone', 'officeWhatsapp',
+        'contactEmail', 'officeAddress', 'officeHours', 'banglaInstruction',
+        'banglaNotice', 'privacyPolicy', 'termsText', 'updatedAt'
+      ]) &&
+      data.academyName is string && data.academyName.size() >= 2 && data.academyName.size() <= 140 &&
+      data.tagline is string && data.tagline.size() <= 200 &&
+      data.logoUrl is string && data.logoUrl.size() <= 200000 &&
+      data.contactPhone is string && data.contactPhone.size() <= 40 &&
+      data.officeWhatsapp is string && data.officeWhatsapp.size() <= 40 &&
+      data.contactEmail is string && data.contactEmail.size() <= 120 &&
+      data.officeAddress is string && data.officeAddress.size() <= 300 &&
+      data.officeHours is string && data.officeHours.size() <= 160 &&
+      data.banglaInstruction is string && data.banglaInstruction.size() <= 1200 &&
+      data.banglaNotice is string && data.banglaNotice.size() <= 1200 &&
+      data.privacyPolicy is string && data.privacyPolicy.size() <= 3000 &&
+      data.termsText is string && data.termsText.size() <= 3000 &&
+      data.updatedAt is timestamp;
+    }
+
+    function isValidPortalSecurity(data) {
+      return data.keys().hasAll([
+        'portalAccessKey', 'requireManualPaymentReview',
+        'autoNotifyTemplateBn', 'autoNotifyTemplateEn', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'portalAccessKey', 'requireManualPaymentReview',
+        'autoNotifyTemplateBn', 'autoNotifyTemplateEn', 'updatedAt'
+      ]) &&
+      isValidId(data.portalAccessKey) && data.portalAccessKey.size() >= 24 && data.portalAccessKey.size() <= 64 &&
+      data.requireManualPaymentReview is bool &&
+      data.autoNotifyTemplateBn is string && data.autoNotifyTemplateBn.size() <= 800 &&
+      data.autoNotifyTemplateEn is string && data.autoNotifyTemplateEn.size() <= 800 &&
+      data.updatedAt is timestamp;
+    }
+
+    // --- Collection Rules ---
+
+    // 1. Atomic duplicate registration lock
+    match /reg_locks/{regKey} {
+      allow get: if isValidId(regKey);
+      allow list: if isAdmin();
+      allow create: if isValidId(regKey) &&
+        isValidRegLock(incoming()) &&
+        incoming().regKey == regKey &&
+        incoming().createdAt == request.time;
+      allow update: if false;
+      allow delete: if isValidId(regKey) && canManageExamsAndBatches();
+    }
+
+    // 2. Students (PII protected: Admin read/update only; public create with strict Submitted defaults)
+    match /students/{studentId} {
+      allow get: if isValidId(studentId) && isAdmin();
+      allow list: if isAdmin();
+      allow create: if isValidId(studentId) &&
+        isValidStudent(incoming()) &&
+        incoming().verificationStatus == 'Submitted' &&
+        incoming().paymentStatus == 'Pending' &&
+        incoming().groupStatus == 'Not Added' &&
+        incoming().adminNotes == '' &&
+        incoming().publicRemark == '' &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        !exists(/databases/$(database)/documents/reg_locks/$(incoming().regKey)) &&
+        existsAfter(/databases/$(database)/documents/reg_locks/$(incoming().regKey));
+      allow update: if isValidId(studentId) &&
+        isValidStudent(incoming()) &&
+        canEditStudents() &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().applicationId == existing().applicationId &&
+        incoming().updatedAt == request.time &&
+        (
+          (
+            canManageExamsAndBatches() &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'fullName', 'bcsRegNo', 'regKey', 'whatsappNumber', 'batchId', 'batchName',
+              'verificationStatus', 'paymentStatus', 'groupStatus', 'adminNotes', 'publicRemark', 'updatedAt'
+            ])
+          ) ||
+          (
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'verificationStatus', 'paymentStatus', 'groupStatus', 'adminNotes', 'publicRemark', 'updatedAt'
+            ])
+          )
+        );
+      allow delete: if isValidId(studentId) && isSuperAdmin();
+    }
+
+    // 3. Isolated SHA-256 keyed student status card
+    match /student_status_tokens/{lookupHash} {
+      allow get: if isValidId(lookupHash) && lookupHash.size() == 64 && lookupHash.matches('^[a-f0-9]{64}$');
+      allow list: if isAdmin();
+      allow create: if isValidId(lookupHash) &&
+        lookupHash.size() == 64 &&
+        lookupHash.matches('^[a-f0-9]{64}$') &&
+        isValidStatusToken(incoming()) &&
+        incoming().verificationStatus == 'Submitted' &&
+        incoming().paymentStatus == 'Pending' &&
+        incoming().groupStatus == 'Not Added' &&
+        incoming().publicRemark == '' &&
+        incoming().portalAccessKey == '' &&
+        incoming().updatedAt == request.time &&
+        existsAfter(/databases/$(database)/documents/students/$(incoming().studentId));
+      allow update: if isValidId(lookupHash) &&
+        lookupHash.size() == 64 &&
+        isValidStatusToken(incoming()) &&
+        canEditStudents() &&
+        incoming().studentId == existing().studentId &&
+        incoming().applicationId == existing().applicationId &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'studentName', 'bcsRegNoMasked', 'batchName', 'verificationStatus',
+          'paymentStatus', 'groupStatus', 'publicRemark', 'portalAccessKey', 'updatedAt'
+        ]);
+      allow delete: if isValidId(lookupHash) && isSuperAdmin();
+    }
+
+    // 4. Safe student correction requests
+    match /student_update_requests/{requestId} {
+      allow get: if isValidId(requestId) && isAdmin();
+      allow list: if isAdmin();
+      allow create: if isValidId(requestId) &&
+        isValidUpdateRequest(incoming()) &&
+        incoming().status == 'Pending' &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        exists(/databases/$(database)/documents/student_status_tokens/$(incoming().lookupHash));
+      allow update: if isValidId(requestId) &&
+        isValidUpdateRequest(incoming()) &&
+        canEditStudents() &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().lookupHash == existing().lookupHash &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'note', 'updatedAt']);
+      allow delete: if isValidId(requestId) && isSuperAdmin();
+    }
+
+    // 5. Batches
+    match /batches/{batchId} {
+      allow get: if isValidId(batchId);
+      allow list: if resource.data.isActive == true || isAdmin();
+      allow create, update: if isValidId(batchId) &&
+        canManageExamsAndBatches() &&
+        isValidBatch(incoming()) &&
+        incoming().updatedAt == request.time;
+      allow delete: if isValidId(batchId) && isSuperAdmin();
+    }
+
+    // 6. Admins & Invites
+    match /admins/{adminId} {
+      allow get: if isValidId(adminId) && (isAdmin() || (isVerifiedUser() && adminId == request.auth.uid));
+      allow list: if isAdmin();
+      allow create: if isValidId(adminId) &&
+        isValidAdminDoc(incoming()) &&
+        incoming().uid == adminId &&
+        incoming().updatedAt == request.time &&
+        (
+          isSuperAdmin() ||
+          (
+            isVerifiedUser() &&
+            adminId == request.auth.uid &&
+            incoming().email == request.auth.token.email &&
+            (
+              (request.auth.token.email == 'cprmedicalacademy@gmail.com' && incoming().role == 'super_admin' && incoming().active == true) ||
+              (
+                isValidId(incoming().inviteId) &&
+                exists(/databases/$(database)/documents/admin_invites/$(incoming().inviteId)) &&
+                get(/databases/$(database)/documents/admin_invites/$(incoming().inviteId)).data.email == request.auth.token.email &&
+                get(/databases/$(database)/documents/admin_invites/$(incoming().inviteId)).data.active == true &&
+                get(/databases/$(database)/documents/admin_invites/$(incoming().inviteId)).data.role == incoming().role &&
+                incoming().active == true
+              )
+            )
+          )
+        );
+      allow update: if isValidId(adminId) &&
+        isSuperAdmin() &&
+        isValidAdminDoc(incoming()) &&
+        incoming().uid == existing().uid &&
+        incoming().updatedAt == request.time;
+      allow delete: if isValidId(adminId) && isSuperAdmin() && adminId != request.auth.uid;
+    }
+
+    match /admin_invites/{inviteId} {
+      allow get: if isValidId(inviteId) && (isAdmin() || (isVerifiedUser() && resource.data.email == request.auth.token.email));
+      allow list: if isAdmin() || (isVerifiedUser() && resource.data.email == request.auth.token.email);
+      allow create, update: if isValidId(inviteId) &&
+        isSuperAdmin() &&
+        isValidAdminInvite(incoming()) &&
+        incoming().updatedAt == request.time;
+      allow delete: if isValidId(inviteId) && isSuperAdmin();
+    }
+
+    // 7. Payment, Verification History, WhatsApp Group, Audit Logs
+    match /payment_records/{recordId} {
+      allow get, list: if isAdmin();
+      allow create: if isValidId(recordId) &&
+        canEditStudents() &&
+        isValidPaymentRecord(incoming()) &&
+        incoming().createdAt == request.time &&
+        exists(/databases/$(database)/documents/students/$(incoming().studentId));
+      allow update, delete: if false;
+    }
+
+    match /verification_history/{historyId} {
+      allow get, list: if isAdmin();
+      allow create: if isValidId(historyId) &&
+        isValidVerificationHistory(incoming()) &&
+        incoming().createdAt == request.time &&
+        (
+          (
+            incoming().actorType == 'student' &&
+            incoming().status == 'Submitted' &&
+            incoming().actorEmail == '' &&
+            existsAfter(/databases/$(database)/documents/students/$(incoming().studentId))
+          ) ||
+          (
+            canEditStudents() &&
+            incoming().actorType == 'admin' &&
+            exists(/databases/$(database)/documents/students/$(incoming().studentId))
+          )
+        );
+      allow update, delete: if false;
+    }
+
+    match /whatsapp_group_records/{recordId} {
+      allow get, list: if isAdmin();
+      allow create: if isValidId(recordId) &&
+        canEditStudents() &&
+        isValidWhatsAppRecord(incoming()) &&
+        incoming().createdAt == request.time &&
+        exists(/databases/$(database)/documents/students/$(incoming().studentId));
+      allow update, delete: if false;
+    }
+
+    match /audit_logs/{logId} {
+      allow get, list: if isAdmin();
+      allow create: if isValidId(logId) &&
+        isAdmin() &&
+        adminRole() in ['super_admin', 'admin', 'verifier'] &&
+        isValidAuditLog(incoming()) &&
+        incoming().createdAt == request.time;
+      allow update, delete: if false;
+    }
+
+    // 8. Exam Notices & Results (Public vs Restricted separation)
+    match /exam_notices/{noticeId} {
+      allow get: if isValidId(noticeId) && ((resource.data.visibility == 'public' && resource.data.isPublished == true) || isAdmin());
+      allow list: if (resource.data.visibility == 'public' && resource.data.isPublished == true) || isAdmin();
+      allow create, update: if isValidId(noticeId) &&
+        canManageExamsAndBatches() &&
+        isValidExamNotice(incoming()) &&
+        incoming().updatedAt == request.time;
+      allow delete: if isValidId(noticeId) && canManageExamsAndBatches();
+    }
+
+    match /exam_results/{resultId} {
+      allow get, list: if isAdmin();
+      allow create, update: if isValidId(resultId) &&
+        canManageExamsAndBatches() &&
+        isValidExamResult(incoming()) &&
+        incoming().updatedAt == request.time;
+      allow delete: if isValidId(resultId) && canManageExamsAndBatches();
+    }
+
+    // 9. Restricted Portal (Unlocked only by portalAccessKey granted to Approved students)
+    match /restricted_portal/{portalKey} {
+      allow read, write: if isAdmin();
+
+      match /notices/{noticeId} {
+        allow get: if isValidId(portalKey) && portalKey.size() >= 24 && isValidId(noticeId) && (resource.data.isPublished == true || isAdmin());
+        allow list: if isValidId(portalKey) && portalKey.size() >= 24 && (resource.data.isPublished == true || isAdmin());
+        allow create, update: if isValidId(portalKey) && portalKey.size() >= 24 && isValidId(noticeId) &&
+          canManageExamsAndBatches() &&
+          isValidExamNotice(incoming()) &&
+          incoming().updatedAt == request.time;
+        allow delete: if isValidId(portalKey) && isValidId(noticeId) && canManageExamsAndBatches();
+      }
+
+      match /results/{resultId} {
+        allow get: if isValidId(portalKey) && portalKey.size() >= 24 && isValidId(resultId) && (resource.data.isPublished == true || isAdmin());
+        allow list: if isValidId(portalKey) && portalKey.size() >= 24 && (resource.data.isPublished == true || isAdmin());
+        allow create, update: if isValidId(portalKey) && portalKey.size() >= 24 && isValidId(resultId) &&
+          canManageExamsAndBatches() &&
+          isValidExamResult(incoming()) &&
+          incoming().updatedAt == request.time;
+        allow delete: if isValidId(portalKey) && isValidId(resultId) && canManageExamsAndBatches();
+      }
+    }
+
+    // 10. Settings
+    match /settings/academy {
+      allow get: if true;
+      allow list: if isAdmin();
+      allow create, update: if isSuperAdmin() &&
+        isValidAcademySettings(incoming()) &&
+        incoming().updatedAt == request.time;
+      allow delete: if false;
+    }
+
+    match /settings/portal_security {
+      allow get, list: if isAdmin();
+      allow create, update: if isSuperAdmin() &&
+        isValidPortalSecurity(incoming()) &&
+        incoming().updatedAt == request.time;
+      allow delete: if false;
+    }
+  }
+}

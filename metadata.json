@@ -1,0 +1,6 @@
+{
+  "name": "CPR Medical Academy – BCS Student Verification Portal",
+  "description": "Official BCS Batch Student Verification, Payment Review, WhatsApp Group Tracking, and Exam Information Portal for CPR Medical Academy.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

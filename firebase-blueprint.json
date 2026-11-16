@@ -1,0 +1,464 @@
+{
+  "entities": {
+    "Student": {
+      "title": "Student",
+      "description": "Registered BCS medical student pending or verified by CPR Medical Academy office.",
+      "type": "object",
+      "properties": {
+        "applicationId": { "type": "string", "minLength": 6, "maxLength": 40, "pattern": "^[A-Z0-9-]+$" },
+        "fullName": { "type": "string", "minLength": 2, "maxLength": 140 },
+        "bcsRegNo": { "type": "string", "minLength": 3, "maxLength": 40 },
+        "regKey": { "type": "string", "minLength": 3, "maxLength": 40, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "whatsappNumber": { "type": "string", "minLength": 8, "maxLength": 24 },
+        "batchId": { "type": "string", "minLength": 1, "maxLength": 80, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "batchName": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "consentAccepted": { "type": "boolean" },
+        "verificationStatus": {
+          "type": "string",
+          "enum": [
+            "Submitted",
+            "Under Review",
+            "Payment Due",
+            "Payment Verified",
+            "Approved",
+            "WhatsApp Group Added",
+            "Rejected / Contact Office"
+          ]
+        },
+        "paymentStatus": {
+          "type": "string",
+          "enum": ["Pending", "Due", "Partially Paid", "Fully Paid", "Verified"]
+        },
+        "groupStatus": {
+          "type": "string",
+          "enum": ["Not Added", "Eligible to Add", "Added", "Contact Needed"]
+        },
+        "lookupHash": { "type": "string", "minLength": 64, "maxLength": 64, "pattern": "^[a-f0-9]{64}$" },
+        "verificationCodeMasked": { "type": "string", "minLength": 4, "maxLength": 24 },
+        "adminNotes": { "type": "string", "maxLength": 1000 },
+        "publicRemark": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "applicationId",
+        "fullName",
+        "bcsRegNo",
+        "regKey",
+        "whatsappNumber",
+        "batchId",
+        "batchName",
+        "consentAccepted",
+        "verificationStatus",
+        "paymentStatus",
+        "groupStatus",
+        "lookupHash",
+        "verificationCodeMasked",
+        "adminNotes",
+        "publicRemark",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "RegLock": {
+      "title": "RegLock",
+      "description": "Uniqueness lock keyed by normalized BCS registration number to prevent duplicate submissions.",
+      "type": "object",
+      "properties": {
+        "regKey": { "type": "string", "minLength": 3, "maxLength": 40, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["regKey", "createdAt"]
+    },
+    "StudentStatusToken": {
+      "title": "StudentStatusToken",
+      "description": "SHA-256 keyed isolated status document enabling private student status lookup without exposing PII lists.",
+      "type": "object",
+      "properties": {
+        "studentId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "applicationId": { "type": "string", "minLength": 6, "maxLength": 40 },
+        "studentName": { "type": "string", "minLength": 2, "maxLength": 140 },
+        "bcsRegNoMasked": { "type": "string", "minLength": 3, "maxLength": 40 },
+        "batchName": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "verificationStatus": {
+          "type": "string",
+          "enum": [
+            "Submitted",
+            "Under Review",
+            "Payment Due",
+            "Payment Verified",
+            "Approved",
+            "WhatsApp Group Added",
+            "Rejected / Contact Office"
+          ]
+        },
+        "paymentStatus": {
+          "type": "string",
+          "enum": ["Pending", "Due", "Partially Paid", "Fully Paid", "Verified"]
+        },
+        "groupStatus": {
+          "type": "string",
+          "enum": ["Not Added", "Eligible to Add", "Added", "Contact Needed"]
+        },
+        "publicRemark": { "type": "string", "maxLength": 500 },
+        "portalAccessKey": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "studentId",
+        "applicationId",
+        "studentName",
+        "bcsRegNoMasked",
+        "batchName",
+        "verificationStatus",
+        "paymentStatus",
+        "groupStatus",
+        "publicRemark",
+        "portalAccessKey",
+        "updatedAt"
+      ]
+    },
+    "StudentUpdateRequest": {
+      "title": "StudentUpdateRequest",
+      "description": "Safe correction request submitted by a student holding a valid verification token.",
+      "type": "object",
+      "properties": {
+        "lookupHash": { "type": "string", "minLength": 64, "maxLength": 64, "pattern": "^[a-f0-9]{64}$" },
+        "bcsRegNo": { "type": "string", "minLength": 3, "maxLength": 40 },
+        "requestedFullName": { "type": "string", "minLength": 2, "maxLength": 140 },
+        "requestedWhatsapp": { "type": "string", "minLength": 8, "maxLength": 24 },
+        "requestedBatchName": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "note": { "type": "string", "maxLength": 500 },
+        "status": { "type": "string", "enum": ["Pending", "Resolved", "Dismissed"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "lookupHash",
+        "bcsRegNo",
+        "requestedFullName",
+        "requestedWhatsapp",
+        "requestedBatchName",
+        "note",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Batch": {
+      "title": "Batch",
+      "description": "BCS academic batch configuration.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "code": { "type": "string", "minLength": 2, "maxLength": 32 },
+        "description": { "type": "string", "maxLength": 400 },
+        "isActive": { "type": "boolean" },
+        "sortOrder": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "code", "description", "isActive", "sortOrder", "updatedAt"]
+    },
+    "AdminUser": {
+      "title": "AdminUser",
+      "description": "Authorized admin/staff account with role-based permissions.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "email": { "type": "string", "format": "email", "maxLength": 160 },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "role": { "type": "string", "enum": ["super_admin", "admin", "verifier", "viewer"] },
+        "active": { "type": "boolean" },
+        "inviteId": { "type": "string", "maxLength": 128 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "displayName", "role", "active", "inviteId", "updatedAt"]
+    },
+    "AdminInvite": {
+      "title": "AdminInvite",
+      "description": "Pending or active staff invite record keyed by inviteId.",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email", "maxLength": 160 },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "role": { "type": "string", "enum": ["super_admin", "admin", "verifier", "viewer"] },
+        "active": { "type": "boolean" },
+        "invitedBy": { "type": "string", "maxLength": 160 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "displayName", "role", "active", "invitedBy", "updatedAt"]
+    },
+    "PaymentRecord": {
+      "title": "PaymentRecord",
+      "description": "Manual payment verification ledger entry created by office admins.",
+      "type": "object",
+      "properties": {
+        "studentId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "applicationId": { "type": "string", "maxLength": 40 },
+        "studentName": { "type": "string", "maxLength": 140 },
+        "bcsRegNo": { "type": "string", "maxLength": 40 },
+        "previousStatus": { "type": "string", "enum": ["Pending", "Due", "Partially Paid", "Fully Paid", "Verified"] },
+        "newStatus": { "type": "string", "enum": ["Pending", "Due", "Partially Paid", "Fully Paid", "Verified"] },
+        "amountPaid": { "type": "number" },
+        "amountDue": { "type": "number" },
+        "referenceNote": { "type": "string", "maxLength": 500 },
+        "verifiedByEmail": { "type": "string", "maxLength": 160 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "studentId",
+        "applicationId",
+        "studentName",
+        "bcsRegNo",
+        "previousStatus",
+        "newStatus",
+        "amountPaid",
+        "amountDue",
+        "referenceNote",
+        "verifiedByEmail",
+        "createdAt"
+      ]
+    },
+    "VerificationHistory": {
+      "title": "VerificationHistory",
+      "description": "Timeline of verification status transitions for each student.",
+      "type": "object",
+      "properties": {
+        "studentId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "status": { "type": "string", "maxLength": 60 },
+        "note": { "type": "string", "maxLength": 500 },
+        "actorType": { "type": "string", "enum": ["student", "admin"] },
+        "actorEmail": { "type": "string", "maxLength": 160 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["studentId", "status", "note", "actorType", "actorEmail", "createdAt"]
+    },
+    "WhatsAppGroupRecord": {
+      "title": "WhatsAppGroupRecord",
+      "description": "Manual WhatsApp group addition & outreach tracking record.",
+      "type": "object",
+      "properties": {
+        "studentId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "studentName": { "type": "string", "maxLength": 140 },
+        "bcsRegNo": { "type": "string", "maxLength": 40 },
+        "previousGroupStatus": { "type": "string", "enum": ["Not Added", "Eligible to Add", "Added", "Contact Needed"] },
+        "newGroupStatus": { "type": "string", "enum": ["Not Added", "Eligible to Add", "Added", "Contact Needed"] },
+        "note": { "type": "string", "maxLength": 500 },
+        "updatedByEmail": { "type": "string", "maxLength": 160 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "studentId",
+        "studentName",
+        "bcsRegNo",
+        "previousGroupStatus",
+        "newGroupStatus",
+        "note",
+        "updatedByEmail",
+        "createdAt"
+      ]
+    },
+    "ExamNotice": {
+      "title": "ExamNotice",
+      "description": "Exam schedule, routine, or notice for Subject Final and Grand Mock Examinations.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "minLength": 2, "maxLength": 200 },
+        "category": { "type": "string", "enum": ["Subject Final", "Grand Mock", "Exam Routine", "General Notice"] },
+        "batchName": { "type": "string", "maxLength": 120 },
+        "examDate": { "type": "string", "maxLength": 60 },
+        "summary": { "type": "string", "maxLength": 2000 },
+        "attachmentName": { "type": "string", "maxLength": 180 },
+        "attachmentUrl": { "type": "string", "maxLength": 450000 },
+        "visibility": { "type": "string", "enum": ["public", "approved_only"] },
+        "isPublished": { "type": "boolean" },
+        "updatedByEmail": { "type": "string", "maxLength": 160 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "title",
+        "category",
+        "batchName",
+        "examDate",
+        "summary",
+        "attachmentName",
+        "attachmentUrl",
+        "visibility",
+        "isPublished",
+        "updatedByEmail",
+        "updatedAt"
+      ]
+    },
+    "ExamResult": {
+      "title": "ExamResult",
+      "description": "Published exam result sheet accessible strictly to approved students and admins.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "minLength": 2, "maxLength": 200 },
+        "examType": { "type": "string", "enum": ["Subject Final Examination", "Grand Mock Examination"] },
+        "batchName": { "type": "string", "maxLength": 120 },
+        "examDate": { "type": "string", "maxLength": 60 },
+        "summary": { "type": "string", "maxLength": 1000 },
+        "fileName": { "type": "string", "maxLength": 180 },
+        "fileDataUrl": { "type": "string", "maxLength": 450000 },
+        "parsedCsvRows": { "type": "string", "maxLength": 250000 },
+        "isPublished": { "type": "boolean" },
+        "publishedByEmail": { "type": "string", "maxLength": 160 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "title",
+        "examType",
+        "batchName",
+        "examDate",
+        "summary",
+        "fileName",
+        "fileDataUrl",
+        "parsedCsvRows",
+        "isPublished",
+        "publishedByEmail",
+        "updatedAt"
+      ]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Immutable administrative audit trail recording status, payment, group, and settings modifications.",
+      "type": "object",
+      "properties": {
+        "action": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "targetType": { "type": "string", "minLength": 2, "maxLength": 60 },
+        "targetId": { "type": "string", "maxLength": 128 },
+        "targetLabel": { "type": "string", "maxLength": 180 },
+        "details": { "type": "string", "maxLength": 1000 },
+        "actorUid": { "type": "string", "maxLength": 128 },
+        "actorEmail": { "type": "string", "maxLength": 160 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["action", "targetType", "targetId", "targetLabel", "details", "actorUid", "actorEmail", "createdAt"]
+    },
+    "AcademySettings": {
+      "title": "AcademySettings",
+      "description": "Publicly readable academy contact details, instructions, privacy notice, and terms.",
+      "type": "object",
+      "properties": {
+        "academyName": { "type": "string", "minLength": 2, "maxLength": 140 },
+        "tagline": { "type": "string", "maxLength": 200 },
+        "logoUrl": { "type": "string", "maxLength": 200000 },
+        "contactPhone": { "type": "string", "maxLength": 40 },
+        "officeWhatsapp": { "type": "string", "maxLength": 40 },
+        "contactEmail": { "type": "string", "maxLength": 120 },
+        "officeAddress": { "type": "string", "maxLength": 300 },
+        "officeHours": { "type": "string", "maxLength": 160 },
+        "banglaInstruction": { "type": "string", "maxLength": 1200 },
+        "banglaNotice": { "type": "string", "maxLength": 1200 },
+        "privacyPolicy": { "type": "string", "maxLength": 3000 },
+        "termsText": { "type": "string", "maxLength": 3000 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "academyName",
+        "tagline",
+        "logoUrl",
+        "contactPhone",
+        "officeWhatsapp",
+        "contactEmail",
+        "officeAddress",
+        "officeHours",
+        "banglaInstruction",
+        "banglaNotice",
+        "privacyPolicy",
+        "termsText",
+        "updatedAt"
+      ]
+    },
+    "PortalSecuritySettings": {
+      "title": "PortalSecuritySettings",
+      "description": "Admin-only portal security & notification configuration including restricted portal access key.",
+      "type": "object",
+      "properties": {
+        "portalAccessKey": { "type": "string", "minLength": 24, "maxLength": 64, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "requireManualPaymentReview": { "type": "boolean" },
+        "autoNotifyTemplateBn": { "type": "string", "maxLength": 800 },
+        "autoNotifyTemplateEn": { "type": "string", "maxLength": 800 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "portalAccessKey",
+        "requireManualPaymentReview",
+        "autoNotifyTemplateBn",
+        "autoNotifyTemplateEn",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/students/{studentId}": {
+      "schema": { "$ref": "#/entities/Student" },
+      "description": "Student verification records. Public create only with strict Submitted/Pending/Not Added defaults; Admin read/update."
+    },
+    "/reg_locks/{regKey}": {
+      "schema": { "$ref": "#/entities/RegLock" },
+      "description": "Atomic duplicate prevention lock keyed by sanitized BCS registration number."
+    },
+    "/student_status_tokens/{lookupHash}": {
+      "schema": { "$ref": "#/entities/StudentStatusToken" },
+      "description": "SHA-256 keyed student status card for private status lookup without exposing PII list."
+    },
+    "/student_update_requests/{requestId}": {
+      "schema": { "$ref": "#/entities/StudentUpdateRequest" },
+      "description": "Correction requests submitted by students with valid status tokens."
+    },
+    "/batches/{batchId}": {
+      "schema": { "$ref": "#/entities/Batch" },
+      "description": "Configurable BCS batches."
+    },
+    "/admins/{adminId}": {
+      "schema": { "$ref": "#/entities/AdminUser" },
+      "description": "Authorized admin accounts and RBAC roles."
+    },
+    "/admin_invites/{inviteId}": {
+      "schema": { "$ref": "#/entities/AdminInvite" },
+      "description": "Pending admin invitations managed by Super Admin."
+    },
+    "/payment_records/{recordId}": {
+      "schema": { "$ref": "#/entities/PaymentRecord" },
+      "description": "Manual payment verification records."
+    },
+    "/verification_history/{historyId}": {
+      "schema": { "$ref": "#/entities/VerificationHistory" },
+      "description": "Per-student verification timeline."
+    },
+    "/whatsapp_group_records/{recordId}": {
+      "schema": { "$ref": "#/entities/WhatsAppGroupRecord" },
+      "description": "Manual WhatsApp group status transition records."
+    },
+    "/exam_notices/{noticeId}": {
+      "schema": { "$ref": "#/entities/ExamNotice" },
+      "description": "Public announcements and admin-managed exam notices."
+    },
+    "/exam_results/{resultId}": {
+      "schema": { "$ref": "#/entities/ExamResult" },
+      "description": "Admin-managed exam results (strictly Admin-readable at master path)."
+    },
+    "/audit_logs/{logId}": {
+      "schema": { "$ref": "#/entities/AuditLog" },
+      "description": "Immutable admin audit trail."
+    },
+    "/settings/academy": {
+      "schema": { "$ref": "#/entities/AcademySettings" },
+      "description": "Public academy branding, office contact, instructions, and privacy policy."
+    },
+    "/settings/portal_security": {
+      "schema": { "$ref": "#/entities/PortalSecuritySettings" },
+      "description": "Admin-only portal access key and notification settings."
+    },
+    "/restricted_portal/{portalKey}/notices/{noticeId}": {
+      "schema": { "$ref": "#/entities/ExamNotice" },
+      "description": "Approved-only notices synced under the private portalAccessKey."
+    },
+    "/restricted_portal/{portalKey}/results/{resultId}": {
+      "schema": { "$ref": "#/entities/ExamResult" },
+      "description": "Approved-only exam results synced under the private portalAccessKey."
+    }
+  }
+}

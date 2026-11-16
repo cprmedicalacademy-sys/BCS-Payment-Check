@@ -1,0 +1,810 @@
+import React, { useEffect, useState } from 'react';
+import {
+  AlertCircle,
+  ArrowRight,
+  BookOpen,
+  Calendar,
+  Check,
+  CheckCircle2,
+  Copy,
+  FileText,
+  Info,
+  Lock,
+  Phone,
+  ShieldCheck,
+} from 'lucide-react';
+import {
+  AcademySettings,
+  BatchItem,
+  EXAM_HALL_IMAGE,
+  ExamNotice,
+  HERO_LECTURE_IMAGE,
+  Language,
+} from '../types/portal';
+import {
+  checkDuplicateRegNo,
+  StudentRegistrationReceipt,
+  submitStudentRegistration,
+} from '../services/portalService';
+import { buildWhatsAppLink, validateWhatsAppPhone } from '../lib/crypto';
+import { PublicRoute } from './PublicHeader';
+
+interface LandingPageProps {
+  settings: AcademySettings;
+  batches: BatchItem[];
+  publicNotices: ExamNotice[];
+  onNavigate: (route: PublicRoute, sectionId?: string) => void;
+  initialFocusSection?: string;
+}
+
+export const LandingPage: React.FC<LandingPageProps> = ({
+  settings,
+  batches,
+  publicNotices,
+  onNavigate,
+  initialFocusSection,
+}) => {
+  const [lang, setLang] = useState<Language>('bn');
+  const [heroImgErr, setHeroImgErr] = useState(false);
+  const [examImgErr, setExamImgErr] = useState(false);
+
+  // Registration Form State
+  const [fullName, setFullName] = useState('');
+  const [bcsRegNo, setBcsRegNo] = useState('');
+  const [whatsappNumber, setWhatsappNumber] = useState('');
+  const [batchId, setBatchId] = useState(batches[0]?.id || 'special-bcs-crystal');
+  const [consentAccepted, setConsentAccepted] = useState(false);
+
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [duplicateAlert, setDuplicateAlert] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+  const [receipt, setReceipt] = useState<StudentRegistrationReceipt | null>(null);
+  const [copiedCode, setCopiedCode] = useState(false);
+
+  useEffect(() => {
+    if (batches.length > 0 && !batches.some((b) => b.id === batchId)) {
+      setBatchId(batches[0].id);
+    }
+  }, [batches, batchId]);
+
+  useEffect(() => {
+    if (initialFocusSection) {
+      const el = document.getElementById(initialFocusSection);
+      if (el) {
+        setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
+      }
+    }
+  }, [initialFocusSection]);
+
+  const handleRegBlur = async () => {
+    if (bcsRegNo.trim().length < 3) return;
+    try {
+      const exists = await checkDuplicateRegNo(bcsRegNo);
+      setDuplicateAlert(exists);
+    } catch {
+      // Ignore transient lookup error on blur
+    }
+  };
+
+  const validateForm = (): boolean => {
+    const errors: Record<string, string> = {};
+
+    if (fullName.trim().length < 2) {
+      errors.fullName =
+        'অনুগ্রহ করে আপনার পূর্ণ নাম লিখুন (কমপক্ষে ২ অক্ষর)। Please enter your full name.';
+    }
+
+    const cleanReg = bcsRegNo.trim().replace(/[^a-zA-Z0-9_-]/g, '');
+    if (cleanReg.length < 3 || cleanReg.length > 40) {
+      errors.bcsRegNo =
+        'সঠিক BCS Registration Number প্রদান করুন (৩–৪০ অক্ষর)। Enter a valid BCS Registration Number.';
+    }
+
+    if (!validateWhatsAppPhone(whatsappNumber)) {
+      errors.whatsappNumber =
+        'সঠিক WhatsApp মোবাইল নম্বর দিন (যেমন: 017XXXXXXXX বা +88017XXXXXXXX)। Enter a valid WhatsApp number.';
+    }
+
+    if (!batchId) {
+      errors.batchId = 'অনুগ্রহ করে আপনার ব্যাচ নির্বাচন করুন। Please select your batch.';
+    }
+
+    if (!consentAccepted) {
+      errors.consentAccepted =
+        'তথ্য সঠিক মর্মে সম্মতি বক্সে টিক দিন। Please confirm that your submitted details are accurate.';
+    }
+
+    setFieldErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitError('');
+    setDuplicateAlert(false);
+
+    if (!validateForm()) return;
+
+    const selectedBatch = batches.find((b) => b.id === batchId) || batches[0];
+    setSubmitting(true);
+
+    try {
+      const res = await submitStudentRegistration({
+        fullName: fullName.trim(),
+        bcsRegNo: bcsRegNo.trim(),
+        whatsappNumber: whatsappNumber.trim(),
+        batchId: selectedBatch.id,
+        batchName: selectedBatch.name,
+        consentAccepted: true,
+      });
+      setReceipt(res);
+      setFullName('');
+      setBcsRegNo('');
+      setWhatsappNumber('');
+      setConsentAccepted(false);
+      setFieldErrors({});
+    } catch (err: any) {
+      if (err?.message === 'DUPLICATE_REG_NO') {
+        setDuplicateAlert(true);
+        setSubmitError(
+          'এই BCS Registration Number দিয়ে ইতোমধ্যে একটি আবেদন জমা রয়েছে। অনুগ্রহ করে Status Check পেজে আপনার কোড ব্যবহার করুন অথবা CPR অফিসে যোগাযোগ করুন।'
+        );
+      } else if (err?.message === 'INVALID_REG_NO') {
+        setFieldErrors((prev) => ({
+          ...prev,
+          bcsRegNo: 'সঠিক BCS Registration Number লিখুন।',
+        }));
+      } else {
+        setSubmitError(
+          'আবেদন জমা দিতে সমস্যা হয়েছে। আপনার ইন্টারনেট সংযোগ পরীক্ষা করে আবার চেষ্টা করুন অথবা অফিসে যোগাযোগ করুন।'
+        );
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const copyCredentials = () => {
+    if (!receipt) return;
+    const text = `CPR Medical Academy Verification Receipt\nApplication ID: ${receipt.applicationId}\nBCS Reg No: ${receipt.bcsRegNo}\nVerification Code: ${receipt.verificationCode}`;
+    navigator.clipboard.writeText(text);
+    setCopiedCode(true);
+    setTimeout(() => setCopiedCode(false), 2000);
+  };
+
+  const steps = [
+    {
+      num: '01.',
+      title: lang === 'bn' ? 'তথ্য জমা দিন' : 'Submit Registration',
+      desc:
+        lang === 'bn'
+          ? 'নাম, BCS Registration Number, WhatsApp ও ব্যাচের তথ্য সঠিকভাবে জমা দিন।'
+          : 'Provide your full name, unique BCS registration number, WhatsApp number, and batch.',
+    },
+    {
+      num: '02.',
+      title: lang === 'bn' ? 'অফিস যাচাইকরণ' : 'Manual Identity Review',
+      desc:
+        lang === 'bn'
+          ? 'CPR Medical Academy অফিস আপনার পরিচয় ও ব্যাচের রেকর্ড ম্যানুয়ালি যাচাই করবে।'
+          : 'Our academic office verifies your candidate identity and batch enrollment record.',
+    },
+    {
+      num: '03.',
+      title: lang === 'bn' ? 'পেমেন্ট ক্লিয়ারেন্স' : 'Payment Clearance',
+      desc:
+        lang === 'bn'
+          ? 'বকেয়া বা কোর্স ফি যাচাই সম্পন্ন হলে আপনার স্ট্যাটাস Payment Verified হবে।'
+          : 'Office confirms tuition fee settlement or outstanding balance clearance manually.',
+    },
+    {
+      num: '04.',
+      title: lang === 'bn' ? 'WhatsApp ও পরীক্ষার তথ্য' : 'WhatsApp & Exam Access',
+      desc:
+        lang === 'bn'
+          ? 'অনুমোদিত শিক্ষার্থীদের অফিসিয়াল WhatsApp Group এবং Subject Final ও Grand Mock রেজাল্টে যুক্ত করা হবে।'
+          : 'Approved candidates are added to the official WhatsApp group and unlock restricted results.',
+    },
+  ];
+
+  return (
+    <div className="bg-[#F8FAFC]">
+      {/* Hero Section */}
+      <section className="border-b border-slate-200 bg-white">
+        <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8 lg:py-14">
+          {/* Language & Tagline Toolbar */}
+          <div className="mb-8 flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-4">
+            <div className="flex items-center gap-2 text-xs font-medium text-slate-600">
+              <span>{settings.academyName}</span>
+              <span aria-hidden="true">·</span>
+              <span className="text-[#0F766E]">{settings.tagline}</span>
+            </div>
+
+            <div className="inline-flex items-center rounded-md border border-slate-200 bg-slate-50 p-0.5">
+              <button
+                type="button"
+                onClick={() => setLang('bn')}
+                className={`rounded px-3 py-1 text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${
+                  lang === 'bn'
+                    ? 'bg-[#0B1F3A] text-white'
+                    : 'text-slate-600 hover:text-[#0B1F3A]'
+                }`}
+              >
+                বাংলা
+              </button>
+              <button
+                type="button"
+                onClick={() => setLang('en')}
+                className={`rounded px-3 py-1 text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${
+                  lang === 'en'
+                    ? 'bg-[#0B1F3A] text-white'
+                    : 'text-slate-600 hover:text-[#0B1F3A]'
+                }`}
+              >
+                English
+              </button>
+            </div>
+          </div>
+
+          {/* 2-Column Hero Split */}
+          <div className="grid grid-cols-1 items-stretch gap-10 lg:grid-cols-12">
+            <div className="flex flex-col justify-between space-y-8 lg:col-span-6">
+              <div className="space-y-5">
+                <p className="text-xs font-semibold tracking-wide text-[#1D5FA7]">
+                  BCS Batch Student Verification
+                </p>
+                <h1
+                  className="font-display font-bold tracking-tight text-[#0B1F3A]"
+                  style={{
+                    fontSize: 'clamp(2.1rem, 3.6vw, 3.2rem)',
+                    lineHeight: 1.12,
+                    textWrap: 'balance',
+                  }}
+                >
+                  BCS Batch Student Verification Portal
+                </h1>
+                <p className="max-w-xl text-base leading-relaxed text-slate-700 sm:text-lg">
+                  {lang === 'bn'
+                    ? 'Subject Final ও Grand Mock Exam-এর ফলাফল এবং সকল গুরুত্বপূর্ণ তথ্য পেতে আপনার তথ্য জমা দিন।'
+                    : 'Submit your verified BCS candidate information for office review to receive Subject Final and Grand Mock Exam results, routines, and official WhatsApp group updates.'}
+                </p>
+              </div>
+
+              <div className="space-y-5">
+                <div className="flex flex-wrap items-center gap-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const el = document.getElementById('register-section');
+                      el?.scrollIntoView({ behavior: 'smooth' });
+                    }}
+                    className="inline-flex min-h-[44px] items-center gap-2 rounded-md bg-[#1D5FA7] px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#164A84] focus-visible:outline-2 focus-visible:outline-[#1D5FA7] whitespace-nowrap shrink-0"
+                  >
+                    <span>
+                      {lang === 'bn' ? 'ভেরিফিকেশন ফর্ম পূরণ করুন' : 'Submit Verification Form'}
+                    </span>
+                    <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => onNavigate('status')}
+                    className="inline-flex min-h-[44px] items-center gap-2 rounded-md border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-[#0B1F3A] transition-colors hover:bg-slate-50 whitespace-nowrap shrink-0"
+                  >
+                    <span>
+                      {lang === 'bn' ? 'আবেদনের অবস্থা দেখুন' : 'Check Application Status'}
+                    </span>
+                  </button>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                  <span>Manual Office Verification</span>
+                  <span aria-hidden="true">·</span>
+                  <span>Unique BCS Registration Check</span>
+                  <span aria-hidden="true">·</span>
+                  <span>Approved-Only Result Access</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="lg:col-span-6">
+              <div className="relative h-full min-h-[280px] overflow-hidden rounded-lg border border-slate-200 bg-[#0B1F3A]">
+                {!heroImgErr ? (
+                  <img
+                    src={HERO_LECTURE_IMAGE}
+                    alt="CPR Medical Academy BCS study hall and exam preparation center"
+                    referrerPolicy="no-referrer"
+                    onError={() => setHeroImgErr(true)}
+                    className="h-full w-full object-cover lg:h-full"
+                  />
+                ) : (
+                  <div className="flex h-full min-h-[280px] flex-col items-center justify-center p-8 text-center text-white">
+                    <BookOpen className="mb-3 h-10 w-10 text-teal-300" aria-hidden="true" />
+                    <p className="font-display text-lg font-semibold">{settings.academyName}</p>
+                    <p className="mt-1 text-sm text-slate-300">{settings.tagline}</p>
+                  </div>
+                )}
+                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#0B1F3A]/90 via-[#0B1F3A]/55 to-transparent p-6">
+                  <p className="text-xs font-medium text-teal-300">
+                    {settings.academyName}
+                  </p>
+                  <p className="mt-1 text-sm font-medium text-white">
+                    {settings.tagline}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 4-Column Process Strip below hero split */}
+          <div className="mt-12 grid grid-cols-1 gap-6 border-t border-slate-200 pt-8 sm:grid-cols-2 lg:grid-cols-4">
+            {steps.map((step) => (
+              <div key={step.num} className="space-y-1.5">
+                <div className="flex items-baseline gap-2">
+                  <span className="font-mono text-xs font-semibold text-[#1D5FA7] tabular-nums">
+                    {step.num}
+                  </span>
+                  <h2 className="font-display text-sm font-bold text-[#0B1F3A]">
+                    {step.title}
+                  </h2>
+                </div>
+                <p className="text-xs leading-relaxed text-slate-600">{step.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Main Content: Official Instructions + Student Registration Form */}
+      <section id="register-section" className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8 lg:py-16">
+        <div className="grid grid-cols-1 items-start gap-10 lg:grid-cols-12">
+          {/* Left Column: Instructions, Notice & Policy */}
+          <div className="space-y-6 lg:col-span-5">
+            <div className="rounded-lg border border-slate-200 bg-white p-6 sm:p-7 space-y-5">
+              <div className="flex items-center gap-2.5 text-[#0B1F3A]">
+                <Info className="h-5 w-5 text-[#1D5FA7] shrink-0" aria-hidden="true" />
+                <h2 className="font-display text-lg font-bold">
+                  {lang === 'bn' ? 'গুরুত্বপূর্ণ নির্দেশনা' : 'Official Verification Instructions'}
+                </h2>
+              </div>
+
+              <div className="space-y-4 text-sm leading-relaxed text-slate-700">
+                <p>{settings.banglaInstruction}</p>
+                <div className="rounded-md border border-amber-200 bg-amber-50/70 p-4 text-amber-950">
+                  <p className="font-semibold text-xs text-amber-900 mb-1">
+                    {lang === 'bn' ? 'অফিসিয়াল নোটিশ' : 'Important Notice'}
+                  </p>
+                  <p className="text-sm leading-relaxed">{settings.banglaNotice}</p>
+                </div>
+              </div>
+
+              <div className="border-t border-slate-200 pt-5 space-y-3 text-xs text-slate-600">
+                <div className="flex items-start gap-2.5">
+                  <Lock className="mt-0.5 h-4 w-4 text-[#0F766E] shrink-0" aria-hidden="true" />
+                  <p>
+                    <strong className="text-[#0B1F3A]">Mandatory Admin Approval:</strong> Submitting this form does not automatically grant access to the WhatsApp group or exam results. Office staff manually verify identity and payment clearance first.
+                  </p>
+                </div>
+                <div className="flex items-start gap-2.5">
+                  <ShieldCheck className="mt-0.5 h-4 w-4 text-[#1D5FA7] shrink-0" aria-hidden="true" />
+                  <p>
+                    <strong className="text-[#0B1F3A]">Privacy Assurance:</strong> Your WhatsApp number and payment details are visible only to authorized CPR Medical Academy administrators.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Office Support Card */}
+            <div className="rounded-lg border border-slate-200 bg-white p-6 space-y-3">
+              <h3 className="font-display text-sm font-bold text-[#0B1F3A]">
+                {lang === 'bn' ? 'পেমেন্ট বা রেজিস্ট্রেশন সহায়তা' : 'Office Contact & Payment Support'}
+              </h3>
+              <p className="text-xs leading-relaxed text-slate-600">
+                {lang === 'bn'
+                  ? 'পেমেন্ট বকেয়া বা তথ্য সংশোধনের প্রয়োজনে অফিস সময়ে নিচের নম্বরে যোগাযোগ করুন।'
+                  : 'For payment clearance inquiries or registration corrections, contact the academic office.'}
+              </p>
+              <div className="space-y-1.5 pt-1 text-xs text-slate-700">
+                <p className="flex items-center gap-2 font-mono tabular-nums">
+                  <Phone className="h-3.5 w-3.5 text-[#1D5FA7]" aria-hidden="true" />
+                  <span>{settings.contactPhone}</span>
+                </p>
+                <p className="text-slate-500">{settings.officeAddress}</p>
+                <p className="text-slate-500">{settings.officeHours}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column: Registration Form OR Post-Submission Receipt */}
+          <div className="lg:col-span-7">
+            {receipt ? (
+              <div className="rounded-lg border border-[#99F6E4] bg-white p-6 sm:p-8 space-y-6">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-[#F0FDFA] text-[#0F766E]">
+                    <CheckCircle2 className="h-6 w-6" aria-hidden="true" />
+                  </div>
+                  <div>
+                    <h2 className="font-display text-xl font-bold text-[#0B1F3A]">
+                      আবেদন সফলভাবে জমা হয়েছে · Verification Submitted
+                    </h2>
+                    <p className="mt-1 text-sm text-slate-600">
+                      আপনার তথ্য CPR Medical Academy-তে জমা হয়েছে। অফিস থেকে পরিচয় ও পেমেন্ট যাচাই করার পর আপনাকে WhatsApp Group-এ যুক্ত করা হবে।
+                    </p>
+                  </div>
+                </div>
+
+                <div className="rounded-md border border-slate-200 bg-slate-50 p-5 space-y-4">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div>
+                      <p className="text-xs text-slate-500">Application / Reference ID</p>
+                      <p className="mt-0.5 font-mono text-base font-semibold text-[#0B1F3A] tabular-nums">
+                        {receipt.applicationId}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Secure Verification Code (Save This)</p>
+                      <p className="mt-0.5 font-mono text-base font-bold text-[#1D5FA7] tabular-nums">
+                        {receipt.verificationCode}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Candidate Name</p>
+                      <p className="mt-0.5 text-sm font-medium text-slate-900">{receipt.fullName}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">BCS Registration Number</p>
+                      <p className="mt-0.5 font-mono text-sm font-medium text-slate-900 tabular-nums">
+                        {receipt.bcsRegNo}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-slate-200 pt-4 flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-xs text-amber-800 font-medium">
+                      স্ট্যাটাস চেক করতে আপনার BCS Registration Number ও Verification Code সংরক্ষণ করুন।
+                    </p>
+                    <button
+                      type="button"
+                      onClick={copyCredentials}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 whitespace-nowrap shrink-0"
+                    >
+                      {copiedCode ? (
+                        <>
+                          <Check className="h-3.5 w-3.5 text-[#0F766E]" />
+                          <span>Copied</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="h-3.5 w-3.5" />
+                          <span>Copy Receipt</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="rounded-md border border-slate-200 bg-[#EFF6FF]/60 p-4 text-xs leading-relaxed text-slate-700">
+                  <strong>Important:</strong> Submitting this form sets your status to{' '}
+                  <span className="font-mono font-semibold">Submitted</span> and payment status to{' '}
+                  <span className="font-mono font-semibold">Pending</span>. Access to the official WhatsApp group and restricted exam results is granted only after manual office approval.
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => onNavigate('status')}
+                    className="inline-flex min-h-[44px] items-center gap-2 rounded-md bg-[#1D5FA7] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#164A84] whitespace-nowrap shrink-0"
+                  >
+                    <span>Go to Status Check</span>
+                    <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setReceipt(null)}
+                    className="inline-flex min-h-[44px] items-center rounded-md border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 whitespace-nowrap shrink-0"
+                  >
+                    Submit Another Candidate
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <form
+                onSubmit={handleSubmit}
+                noValidate
+                className="rounded-lg border border-slate-200 bg-white p-6 sm:p-8 space-y-6"
+              >
+                <div className="border-b border-slate-200 pb-4">
+                  <h2 className="font-display text-xl font-bold text-[#0B1F3A]">
+                    {lang === 'bn'
+                      ? 'শিক্ষার্থী তথ্য যাচাইকরণ ফর্ম'
+                      : 'BCS Student Verification Form'}
+                  </h2>
+                  <p className="mt-1 text-sm text-slate-600">
+                    {lang === 'bn'
+                      ? 'সকল (*) চিহ্নিত ঘর সঠিকভাবে পূরণ করুন। প্রতিটি BCS Registration Number কেবল একবার জমা দেওয়া যাবে।'
+                      : 'Complete all required fields accurately. Each BCS Registration Number can only be registered once.'}
+                  </p>
+                </div>
+
+                {duplicateAlert && (
+                  <div
+                    role="alert"
+                    className="rounded-md border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 space-y-2.5"
+                  >
+                    <div className="flex items-start gap-2.5">
+                      <AlertCircle className="mt-0.5 h-5 w-5 text-amber-700 shrink-0" aria-hidden="true" />
+                      <div>
+                        <p className="font-semibold">
+                          এই BCS Registration Number-টি ইতোমধ্যে নিবন্ধিত রয়েছে (Duplicate Registration Detected)
+                        </p>
+                        <p className="mt-1 text-xs leading-relaxed text-amber-900">
+                          আপনি ইতোপূর্বে তথ্য জমা দিয়ে থাকলে আপনার Verification Code দিয়ে Status Check পেজ থেকে বর্তমান অবস্থা দেখুন বা তথ্য সংশোধনের অনুরোধ পাঠান। কোড হারিয়ে গেলে অফিসে যোগাযোগ করুন।
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2 pl-7">
+                      <button
+                        type="button"
+                        onClick={() => onNavigate('status')}
+                        className="rounded-md bg-[#0B1F3A] px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-[#16345C]"
+                      >
+                        Check Status / Request Correction
+                      </button>
+                      <a
+                        href={buildWhatsAppLink(
+                          settings.officeWhatsapp,
+                          `Assalamu Alaikum, I need help with my duplicate BCS registration number: ${bcsRegNo}`
+                        )}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="rounded-md border border-amber-400 bg-white px-3.5 py-1.5 text-xs font-semibold text-amber-950 hover:bg-amber-100"
+                      >
+                        Contact CPR Office
+                      </a>
+                    </div>
+                  </div>
+                )}
+
+                {submitError && !duplicateAlert && (
+                  <div
+                    role="alert"
+                    className="flex items-start gap-2.5 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-900"
+                  >
+                    <AlertCircle className="mt-0.5 h-5 w-5 text-red-700 shrink-0" aria-hidden="true" />
+                    <span>{submitError}</span>
+                  </div>
+                )}
+
+                <div className="space-y-5">
+                  {/* Full Name */}
+                  <div>
+                    <label
+                      htmlFor="fullName"
+                      className="block text-sm font-medium text-[#0B1F3A]"
+                    >
+                      Full Name (পূর্ণ নাম) <span className="text-red-600">*</span>
+                    </label>
+                    <input
+                      id="fullName"
+                      type="text"
+                      required
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      placeholder="Dr. Md. Ashraful Islam"
+                      maxLength={140}
+                      className="mt-1.5 block w-full rounded-md border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-[#1D5FA7] focus:outline-none focus:ring-2 focus:ring-[#1D5FA7]/20"
+                    />
+                    {fieldErrors.fullName && (
+                      <p className="mt-1.5 text-xs text-red-700">{fieldErrors.fullName}</p>
+                    )}
+                  </div>
+
+                  {/* BCS Reg No & WhatsApp */}
+                  <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                    <div>
+                      <label
+                        htmlFor="bcsRegNo"
+                        className="block text-sm font-medium text-[#0B1F3A]"
+                      >
+                        BCS Registration Number <span className="text-red-600">*</span>
+                      </label>
+                      <input
+                        id="bcsRegNo"
+                        type="text"
+                        required
+                        value={bcsRegNo}
+                        onChange={(e) => {
+                          setBcsRegNo(e.target.value);
+                          setDuplicateAlert(false);
+                        }}
+                        onBlur={handleRegBlur}
+                        placeholder="e.g. 46-102945"
+                        maxLength={40}
+                        className="mt-1.5 block w-full rounded-md border border-slate-300 bg-white px-3.5 py-2.5 font-mono text-sm text-slate-900 placeholder:font-sans placeholder:text-slate-400 focus:border-[#1D5FA7] focus:outline-none focus:ring-2 focus:ring-[#1D5FA7]/20"
+                      />
+                      {fieldErrors.bcsRegNo && (
+                        <p className="mt-1.5 text-xs text-red-700">{fieldErrors.bcsRegNo}</p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label
+                        htmlFor="whatsappNumber"
+                        className="block text-sm font-medium text-[#0B1F3A]"
+                      >
+                        WhatsApp Number <span className="text-red-600">*</span>
+                      </label>
+                      <input
+                        id="whatsappNumber"
+                        type="tel"
+                        required
+                        value={whatsappNumber}
+                        onChange={(e) => setWhatsappNumber(e.target.value)}
+                        placeholder="017XXXXXXXX"
+                        maxLength={24}
+                        className="mt-1.5 block w-full rounded-md border border-slate-300 bg-white px-3.5 py-2.5 font-mono text-sm text-slate-900 placeholder:font-sans placeholder:text-slate-400 focus:border-[#1D5FA7] focus:outline-none focus:ring-2 focus:ring-[#1D5FA7]/20"
+                      />
+                      {fieldErrors.whatsappNumber && (
+                        <p className="mt-1.5 text-xs text-red-700">{fieldErrors.whatsappNumber}</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Batch Selection */}
+                  <div>
+                    <label
+                      htmlFor="batchId"
+                      className="block text-sm font-medium text-[#0B1F3A]"
+                    >
+                      Batch Selection (ব্যাচ নির্বাচন) <span className="text-red-600">*</span>
+                    </label>
+                    <select
+                      id="batchId"
+                      value={batchId}
+                      onChange={(e) => setBatchId(e.target.value)}
+                      className="mt-1.5 block w-full rounded-md border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 focus:border-[#1D5FA7] focus:outline-none focus:ring-2 focus:ring-[#1D5FA7]/20"
+                    >
+                      {batches.map((b) => (
+                        <option key={b.id} value={b.id}>
+                          {b.name}
+                        </option>
+                      ))}
+                    </select>
+                    {fieldErrors.batchId && (
+                      <p className="mt-1.5 text-xs text-red-700">{fieldErrors.batchId}</p>
+                    )}
+                  </div>
+
+                  {/* Consent Checkbox */}
+                  <div className="rounded-md border border-slate-200 bg-slate-50 p-4">
+                    <label className="flex cursor-pointer items-start gap-3">
+                      <input
+                        type="checkbox"
+                        checked={consentAccepted}
+                        onChange={(e) => setConsentAccepted(e.target.checked)}
+                        className="mt-1 h-4 w-4 rounded border-slate-300 text-[#1D5FA7] focus:ring-[#1D5FA7]"
+                      />
+                      <span className="text-xs leading-relaxed text-slate-700">
+                        আমি নিশ্চিত করছি যে প্রদত্ত নাম, BCS Registration Number, WhatsApp Number ও ব্যাচের তথ্য সম্পূর্ণ সঠিক। অফিস থেকে পরিচয় ও পেমেন্ট যাচাই সম্পন্ন হওয়ার পর আমাকে অফিসিয়াল WhatsApp Group-এ যুক্ত করা হবে। (I confirm all submitted information is accurate and understand admin approval is mandatory.)
+                      </span>
+                    </label>
+                    {fieldErrors.consentAccepted && (
+                      <p className="mt-2 text-xs text-red-700">{fieldErrors.consentAccepted}</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-xs text-slate-500">
+                    All submissions enter manual review queue immediately.
+                  </p>
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-md bg-[#1D5FA7] px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#164A84] disabled:opacity-60 whitespace-nowrap shrink-0"
+                  >
+                    {submitting ? 'Submitting...' : 'Submit Verification Information'}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* Public Exam Announcements & Overview */}
+      <section
+        id="public-notices-section"
+        className="border-t border-slate-200 bg-white py-12 lg:py-16"
+      >
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 items-stretch gap-10 lg:grid-cols-12">
+            <div className="lg:col-span-5">
+              <div className="overflow-hidden rounded-lg border border-slate-200 bg-slate-100 h-full min-h-[240px]">
+                {!examImgErr ? (
+                  <img
+                    src={EXAM_HALL_IMAGE}
+                    alt="Subject Final and Grand Mock medical examination preparation materials"
+                    referrerPolicy="no-referrer"
+                    onError={() => setExamImgErr(true)}
+                    className="h-full w-full object-cover lg:h-full"
+                  />
+                ) : (
+                  <div className="flex h-full min-h-[240px] items-center justify-center p-6 text-slate-500">
+                    <FileText className="h-8 w-8" />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-6 lg:col-span-7">
+              <div className="flex flex-wrap items-end justify-between gap-4 border-b border-slate-200 pb-4">
+                <div>
+                  <p className="text-xs font-semibold text-[#1D5FA7]">
+                    Public Academic Notices
+                  </p>
+                  <h2 className="mt-1 font-display text-2xl font-bold text-[#0B1F3A]">
+                    Subject Final & Grand Mock Exam Updates
+                  </h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onNavigate('exams')}
+                  className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#1D5FA7] hover:text-[#164A84] whitespace-nowrap shrink-0"
+                >
+                  <span>Open Exam & Result Portal</span>
+                  <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                </button>
+              </div>
+
+              {publicNotices.length === 0 ? (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-6 text-sm text-slate-600">
+                  No public announcements posted yet. Approved students can check restricted exam schedules and published results inside the Exam Portal.
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-200 border-y border-slate-200">
+                  {publicNotices.map((notice) => (
+                    <article key={notice.id} className="py-4 space-y-1.5">
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                        <span className="font-semibold text-[#0F766E]">{notice.category}</span>
+                        <span aria-hidden="true">·</span>
+                        <span>{notice.batchName}</span>
+                        {notice.examDate && (
+                          <>
+                            <span aria-hidden="true">·</span>
+                            <span className="inline-flex items-center gap-1 font-mono tabular-nums">
+                              <Calendar className="h-3 w-3" aria-hidden="true" />
+                              {notice.examDate}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                      <h3 className="font-display text-base font-bold text-[#0B1F3A]">
+                        {notice.title}
+                      </h3>
+                      <p className="text-sm leading-relaxed text-slate-600">{notice.summary}</p>
+                    </article>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex flex-wrap items-center justify-between gap-4 rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
+                <span>
+                  Restricted exam routines and published merit lists are accessible exclusively to approved students.
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onNavigate('status')}
+                  className="font-semibold text-[#0B1F3A] underline underline-offset-4 hover:text-[#1D5FA7] whitespace-nowrap shrink-0"
+                >
+                  Verify your eligibility
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+};

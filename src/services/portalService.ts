@@ -61,7 +61,28 @@ export async function fetchAcademySettings(): Promise<AcademySettings> {
     if (!snap.exists()) {
       return DEFAULT_ACADEMY_SETTINGS;
     }
-    return { ...DEFAULT_ACADEMY_SETTINGS, ...(snap.data() as AcademySettings) };
+    const data = snap.data() as AcademySettings;
+    return {
+      ...DEFAULT_ACADEMY_SETTINGS,
+      ...data,
+      contactPhone:
+        !data.contactPhone ||
+        data.contactPhone === '+880 1700-000000' ||
+        data.contactPhone === '+880 1848-274000'
+          ? DEFAULT_ACADEMY_SETTINGS.contactPhone
+          : data.contactPhone,
+      officeWhatsapp:
+        !data.officeWhatsapp ||
+        data.officeWhatsapp === '+8801700000000' ||
+        data.officeWhatsapp === '+8801848274000'
+          ? DEFAULT_ACADEMY_SETTINGS.officeWhatsapp
+          : data.officeWhatsapp,
+      officeAddress:
+        !data.officeAddress ||
+        data.officeAddress === 'CPR Medical Academy Academic Office, Shahbagh, Dhaka-1000'
+          ? DEFAULT_ACADEMY_SETTINGS.officeAddress
+          : data.officeAddress,
+    };
   } catch (error) {
     // Public fallback if rules deny or offline
     console.warn('Using default academy settings:', error);
@@ -127,6 +148,7 @@ export interface StudentRegistrationReceipt {
   verificationCode: string;
   bcsRegNo: string;
   fullName: string;
+  whatsappNumber: string;
   batchName: string;
   lookupHash: string;
 }
@@ -212,6 +234,7 @@ export async function submitStudentRegistration(
     verificationCode,
     bcsRegNo: input.bcsRegNo.trim(),
     fullName: input.fullName.trim(),
+    whatsappNumber: input.whatsappNumber.trim(),
     batchName: input.batchName.trim(),
     lookupHash,
   };

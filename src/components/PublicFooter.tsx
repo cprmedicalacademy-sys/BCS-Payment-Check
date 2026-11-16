@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Mail, MapPin, Phone, X } from 'lucide-react';
+import { Mail, MapPin, MessageSquare, Phone, X } from 'lucide-react';
 import { AcademySettings } from '../types/portal';
+import { buildWhatsAppLink } from '../lib/crypto';
 import { PublicRoute } from './PublicHeader';
 
 interface PublicFooterProps {
@@ -31,6 +32,20 @@ export const PublicFooter: React.FC<PublicFooterProps> = ({ settings, onNavigate
               <div className="flex items-start gap-2.5 text-slate-300">
                 <Phone className="mt-0.5 h-4 w-4 shrink-0 text-teal-400" aria-hidden="true" />
                 <span className="tabular-nums">{settings.contactPhone}</span>
+              </div>
+              <div className="flex items-start gap-2.5 text-slate-300">
+                <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-teal-400" aria-hidden="true" />
+                <a
+                  href={buildWhatsAppLink(
+                    settings.officeWhatsapp,
+                    'Assalamu Alaikum CPR Medical Academy, I need assistance regarding BCS Student Verification.'
+                  )}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="tabular-nums underline-offset-4 hover:text-white hover:underline"
+                >
+                  WhatsApp: {settings.contactPhone}
+                </a>
               </div>
               <div className="flex items-start gap-2.5 text-slate-300">
                 <Mail className="mt-0.5 h-4 w-4 shrink-0 text-teal-400" aria-hidden="true" />

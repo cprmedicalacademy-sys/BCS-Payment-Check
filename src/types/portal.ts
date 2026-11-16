@@ -272,10 +272,11 @@ export const DEFAULT_ACADEMY_SETTINGS: AcademySettings = {
   academyName: 'CPR Medical Academy',
   tagline: 'Your Preparation, Our Responsibility.',
   logoUrl: DEFAULT_LOGO_PATH,
-  contactPhone: '+880 1700-000000',
-  officeWhatsapp: '+8801700000000',
+  contactPhone: '+880 1898-938982',
+  officeWhatsapp: '+8801898938982',
   contactEmail: 'cprmedicalacademy@gmail.com',
-  officeAddress: 'CPR Medical Academy Academic Office, Shahbagh, Dhaka-1000',
+  officeAddress:
+    'মতি টাওয়ার (৫ম তলা), গুলজার মোড়, চকবাজার, চট্টগ্রাম (EBL ব্যাংকের ATM বুথের ডান পাশে লিফটের ৪ তলা)',
   officeHours: 'Saturday – Thursday · 10:00 AM – 6:00 PM',
   banglaInstruction:
     'আপনার নাম, BCS Registration Number এবং WhatsApp Number সঠিকভাবে প্রদান করুন। অফিস থেকে আপনার পেমেন্ট ও রেজিস্ট্রেশন যাচাই করার পর WhatsApp Group-এ যুক্ত করা হবে।',

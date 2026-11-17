@@ -41,11 +41,12 @@ export const PublicHeader: React.FC<PublicHeaderProps> = ({
         >
           {!imgError && (settings.logoUrl || DEFAULT_LOGO_PATH) ? (
             <img
+              key={settings.logoUrl || DEFAULT_LOGO_PATH}
               src={settings.logoUrl || DEFAULT_LOGO_PATH}
-              alt={`${settings.academyName} crest`}
+              alt={`${settings.academyName} logo`}
               referrerPolicy="no-referrer"
               onError={() => setImgError(true)}
-              className="h-9 w-9 rounded object-cover border border-slate-200 bg-white shrink-0"
+              className="h-10 w-auto max-w-[132px] rounded-md border border-slate-200 bg-white px-1.5 py-0.5 object-contain sm:h-11 shrink-0"
             />
           ) : (
             <div className="flex h-9 w-9 items-center justify-center rounded bg-[#0B1F3A] text-white shrink-0">

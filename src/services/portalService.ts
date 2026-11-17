@@ -65,6 +65,11 @@ export async function fetchAcademySettings(): Promise<AcademySettings> {
     return {
       ...DEFAULT_ACADEMY_SETTINGS,
       ...data,
+      logoUrl:
+        !data.logoUrl ||
+        data.logoUrl === '/src/assets/images/cpr_academy_emblem_1794842637829.jpg'
+          ? DEFAULT_ACADEMY_SETTINGS.logoUrl
+          : data.logoUrl,
       contactPhone:
         !data.contactPhone ||
         data.contactPhone === '+880 1700-000000' ||

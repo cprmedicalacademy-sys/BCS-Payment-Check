@@ -33,10 +33,12 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return isBootstrappedAdmin() || (
-        isVerifiedUser() &&
-        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.active == true
+      return isSignedIn() && (
+        isBootstrappedAdmin() || (
+          isVerifiedUser() &&
+          exists(/databases/$(database)/documents/admins/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.active == true
+        )
       );
     }
 
@@ -468,7 +470,8 @@ service cloud.firestore {
     // 5. Batches
     match /batches/{batchId} {
       allow get: if isValidId(batchId);
-      allow list: if resource.data.isActive == true || isAdmin();
+      allow list: if resource.data.isActive == true;
+      allow list: if isAdmin();
       allow create, update: if isValidId(batchId) &&
         canManageExamsAndBatches() &&
         isValidBatch(incoming()) &&
@@ -513,7 +516,8 @@ service cloud.firestore {
 
     match /admin_invites/{inviteId} {
       allow get: if isValidId(inviteId) && (isAdmin() || (isVerifiedUser() && resource.data.email == request.auth.token.email));
-      allow list: if isAdmin() || (isVerifiedUser() && resource.data.email == request.auth.token.email);
+      allow list: if isAdmin();
+      allow list: if isVerifiedUser() && resource.data.email == request.auth.token.email;
       allow create, update: if isValidId(inviteId) &&
         isSuperAdmin() &&
         isValidAdminInvite(incoming()) &&
@@ -575,8 +579,10 @@ service cloud.firestore {
 
     // 8. Exam Notices & Results (Public vs Restricted separation)
     match /exam_notices/{noticeId} {
-      allow get: if isValidId(noticeId) && ((resource.data.visibility == 'public' && resource.data.isPublished == true) || isAdmin());
-      allow list: if (resource.data.visibility == 'public' && resource.data.isPublished == true) || isAdmin();
+      allow get: if isValidId(noticeId) && resource.data.visibility == 'public' && resource.data.isPublished == true;
+      allow get: if isValidId(noticeId) && isAdmin();
+      allow list: if resource.data.visibility == 'public' && resource.data.isPublished == true;
+      allow list: if isAdmin();
       allow create, update: if isValidId(noticeId) &&
         canManageExamsAndBatches() &&
         isValidExamNotice(incoming()) &&
@@ -598,8 +604,10 @@ service cloud.firestore {
       allow read, write: if isAdmin();
 
       match /notices/{noticeId} {
-        allow get: if isValidId(portalKey) && portalKey.size() >= 24 && isValidId(noticeId) && (resource.data.isPublished == true || isAdmin());
-        allow list: if isValidId(portalKey) && portalKey.size() >= 24 && (resource.data.isPublished == true || isAdmin());
+        allow get: if isValidId(portalKey) && portalKey.size() >= 24 && isValidId(noticeId) && resource.data.isPublished == true;
+        allow get: if isValidId(portalKey) && portalKey.size() >= 24 && isValidId(noticeId) && isAdmin();
+        allow list: if isValidId(portalKey) && portalKey.size() >= 24 && resource.data.isPublished == true;
+        allow list: if isValidId(portalKey) && portalKey.size() >= 24 && isAdmin();
         allow create, update: if isValidId(portalKey) && portalKey.size() >= 24 && isValidId(noticeId) &&
           canManageExamsAndBatches() &&
           isValidExamNotice(incoming()) &&
@@ -608,8 +616,10 @@ service cloud.firestore {
       }
 
       match /results/{resultId} {
-        allow get: if isValidId(portalKey) && portalKey.size() >= 24 && isValidId(resultId) && (resource.data.isPublished == true || isAdmin());
-        allow list: if isValidId(portalKey) && portalKey.size() >= 24 && (resource.data.isPublished == true || isAdmin());
+        allow get: if isValidId(portalKey) && portalKey.size() >= 24 && isValidId(resultId) && resource.data.isPublished == true;
+        allow get: if isValidId(portalKey) && portalKey.size() >= 24 && isValidId(resultId) && isAdmin();
+        allow list: if isValidId(portalKey) && portalKey.size() >= 24 && resource.data.isPublished == true;
+        allow list: if isValidId(portalKey) && portalKey.size() >= 24 && isAdmin();
         allow create, update: if isValidId(portalKey) && portalKey.size() >= 24 && isValidId(resultId) &&
           canManageExamsAndBatches() &&
           isValidExamResult(incoming()) &&

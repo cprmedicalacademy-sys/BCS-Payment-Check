@@ -366,9 +366,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-[#F8FAFC] px-4">
         <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-8 space-y-6">
-          <div className="space-y-2">
-            <div className="flex h-10 w-10 items-center justify-center rounded-md bg-[#0B1F3A] text-white">
-              {passcodeUnlocked ? <Shield className="h-5 w-5" /> : <Lock className="h-5 w-5" />}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="inline-flex rounded-md border border-slate-200 bg-white px-2.5 py-1.5">
+                <img
+                  src={academySettings.logoUrl || '/assets/aistudio/DA8tf_9c7eeded.jpg'}
+                  alt={`${academySettings.academyName} logo`}
+                  className="h-11 w-auto object-contain"
+                />
+              </div>
+              <div className="flex h-10 w-10 items-center justify-center rounded-md bg-[#0B1F3A] text-white shrink-0">
+                {passcodeUnlocked ? <Shield className="h-5 w-5" /> : <Lock className="h-5 w-5" />}
+              </div>
             </div>
             <h1 className="font-display text-xl font-bold text-[#0B1F3A]">
               CPR Medical Academy Admin Panel
@@ -520,11 +529,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     <div className="flex min-h-screen bg-[#F8FAFC] text-[#0F172A]">
       {/* Desktop Sidebar */}
       <aside className="hidden w-64 shrink-0 flex-col border-r border-slate-200 bg-[#0B1F3A] text-slate-200 lg:flex">
-        <div className="border-b border-slate-800 px-5 py-5">
-          <p className="font-display text-sm font-bold text-white truncate">
-            {academySettings.academyName}
-          </p>
-          <p className="mt-0.5 text-[11px] text-teal-300">Admin Console</p>
+        <div className="border-b border-slate-800 px-5 py-5 space-y-2.5">
+          <div className="inline-flex rounded-md bg-white px-2.5 py-1.5">
+            <img
+              src={academySettings.logoUrl || '/assets/aistudio/DA8tf_9c7eeded.jpg'}
+              alt={`${academySettings.academyName} logo`}
+              className="h-10 w-auto object-contain"
+            />
+          </div>
+          <div>
+            <p className="font-display text-sm font-bold text-white truncate">
+              {academySettings.academyName}
+            </p>
+            <p className="mt-0.5 text-[11px] text-teal-300">Admin Console</p>
+          </div>
         </div>
 
         <nav className="flex-1 space-y-1 p-3" aria-label="Admin navigation">

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Mail, MapPin, MessageSquare, Phone, X } from 'lucide-react';
-import { AcademySettings } from '../types/portal';
+import { AcademySettings, DEFAULT_LOGO_PATH } from '../types/portal';
 import { buildWhatsAppLink } from '../lib/crypto';
 import { PublicRoute } from './PublicHeader';
 
@@ -11,6 +11,7 @@ interface PublicFooterProps {
 
 export const PublicFooter: React.FC<PublicFooterProps> = ({ settings, onNavigate }) => {
   const [modalDoc, setModalDoc] = useState<'privacy' | 'terms' | null>(null);
+  const [logoErr, setLogoErr] = useState(false);
 
   return (
     <>
@@ -18,6 +19,17 @@ export const PublicFooter: React.FC<PublicFooterProps> = ({ settings, onNavigate
         <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 gap-10 md:grid-cols-12">
             <div className="md:col-span-5 space-y-3">
+              {!logoErr && (
+                <div className="inline-flex rounded-md bg-white px-3 py-1.5 shadow-sm">
+                  <img
+                    src={settings.logoUrl || DEFAULT_LOGO_PATH}
+                    alt={`${settings.academyName} official logo`}
+                    referrerPolicy="no-referrer"
+                    onError={() => setLogoErr(true)}
+                    className="h-12 w-auto object-contain"
+                  />
+                </div>
+              )}
               <p className="font-display text-lg font-bold text-white">
                 {settings.academyName}
               </p>

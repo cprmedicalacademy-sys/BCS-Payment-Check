@@ -221,10 +221,11 @@ export const ExamPortalPage: React.FC<ExamPortalPageProps> = ({
                   </label>
                   <input
                     type="text"
+                    inputMode="numeric"
                     required
                     value={bcsRegNo}
                     onChange={(e) => setBcsRegNo(e.target.value)}
-                    placeholder="46-102945"
+                    placeholder="26133362"
                     className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-sm"
                   />
                 </div>

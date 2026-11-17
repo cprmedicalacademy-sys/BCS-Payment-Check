@@ -8,7 +8,10 @@ import {
   CreditCard,
   Download,
   ExternalLink,
+  Eye,
+  EyeOff,
   LayoutDashboard,
+  Lock,
   LogOut,
   Menu,
   MessageSquare,
@@ -21,6 +24,7 @@ import {
 import { onAuthStateChanged, signInWithPopup, signOut, type User } from 'firebase/auth';
 import { auth, googleProvider } from '../lib/firebase';
 import {
+  ADMIN_PANEL_PASSCODE_HASH,
   AcademySettings,
   AdminInvite,
   AdminUser,
@@ -48,7 +52,12 @@ import {
   seedDefaultsIfNeeded,
   updateStudentStatusAndGroup,
 } from '../services/portalService';
-import { buildWhatsAppLink, exportStudentsToCsv, formatTimestamp } from '../lib/crypto';
+import {
+  buildWhatsAppLink,
+  exportStudentsToCsv,
+  formatTimestamp,
+  sha256Hex,
+} from '../lib/crypto';
 import { StatusLabel } from './ui/StatusBadge';
 import { ConfirmDialog } from './ui/ConfirmDialog';
 import { StudentProfileDrawer } from './admin/StudentProfileDrawer';
@@ -80,6 +89,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [currentAdmin, setCurrentAdmin] = useState<AdminUser | null>(null);
   const [authError, setAuthError] = useState('');
   const [signingIn, setSigningIn] = useState(false);
+
+  const [passcodeUnlocked, setPasscodeUnlocked] = useState(false);
+  const [passcodeInput, setPasscodeInput] = useState('');
+  const [showPasscode, setShowPasscode] = useState(false);
+  const [passcodeError, setPasscodeError] = useState('');
+  const [checkingPasscode, setCheckingPasscode] = useState(false);
 
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -183,6 +198,25 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     return () => unsub();
   }, []);
 
+  const handlePasscodeSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasscodeError('');
+    setCheckingPasscode(true);
+    try {
+      const digest = await sha256Hex(passcodeInput.trim());
+      if (digest === ADMIN_PANEL_PASSCODE_HASH) {
+        setPasscodeUnlocked(true);
+        setPasscodeInput('');
+      } else {
+        setPasscodeError(
+          'ভুল অ্যাডমিন পাসওয়ার্ড! সঠিক পাসওয়ার্ড দিন। (Incorrect admin panel password.)'
+        );
+      }
+    } finally {
+      setCheckingPasscode(false);
+    }
+  };
+
   const handleGoogleLogin = async () => {
     setSigningIn(true);
     setAuthError('');
@@ -195,6 +229,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     } finally {
       setSigningIn(false);
     }
+  };
+
+  const handleLockAndSignOut = async () => {
+    setPasscodeUnlocked(false);
+    setPasscodeInput('');
+    await signOut(auth);
   };
 
   // Summary KPIs (exact 7 requested)
@@ -316,57 +356,125 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     );
   }
 
-  if (!firebaseUser || !currentAdmin) {
+  if (!passcodeUnlocked || !firebaseUser || !currentAdmin) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-[#F8FAFC] px-4">
         <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-8 space-y-6">
           <div className="space-y-2">
             <div className="flex h-10 w-10 items-center justify-center rounded-md bg-[#0B1F3A] text-white">
-              <Shield className="h-5 w-5" />
+              {passcodeUnlocked ? <Shield className="h-5 w-5" /> : <Lock className="h-5 w-5" />}
             </div>
             <h1 className="font-display text-xl font-bold text-[#0B1F3A]">
-              CPR Medical Academy Admin Portal
+              CPR Medical Academy Admin Panel
             </h1>
             <p className="text-sm text-slate-600">
-              Sign in with an authorized staff Google account to verify students, confirm payments, manage WhatsApp group eligibility, and publish exam results.
+              {!passcodeUnlocked
+                ? 'অ্যাডমিন প্যানেলে প্রবেশ করতে অ্যাডমিন পাসওয়ার্ড প্রদান করুন। (Enter the Admin Panel password to unlock access.)'
+                : 'পাসওয়ার্ড যাচাই সম্পন্ন হয়েছে। ডাটাবেস অ্যাক্সেস করতে অনুমোদিত Google অ্যাকাউন্ট দিয়ে সাইন-ইন করুন।'}
             </p>
           </div>
 
-          {authError && (
-            <div className="rounded-md border border-red-200 bg-red-50 p-3.5 text-xs text-red-900">
-              {authError}
+          {!passcodeUnlocked ? (
+            <form onSubmit={handlePasscodeSubmit} className="space-y-4">
+              <div>
+                <label
+                  htmlFor="admin-passcode"
+                  className="block text-xs font-semibold text-[#0B1F3A]"
+                >
+                  Admin Panel Password (অ্যাডমিন পাসওয়ার্ড)
+                </label>
+                <div className="relative mt-1.5">
+                  <input
+                    id="admin-passcode"
+                    type={showPasscode ? 'text' : 'password'}
+                    required
+                    autoFocus
+                    value={passcodeInput}
+                    onChange={(e) => {
+                      setPasscodeInput(e.target.value);
+                      setPasscodeError('');
+                    }}
+                    placeholder="••••"
+                    className="block w-full rounded-md border border-slate-300 bg-white px-3.5 py-2.5 pr-10 font-mono text-base tracking-widest text-slate-900 focus:border-[#1D5FA7] focus:outline-none focus:ring-2 focus:ring-[#1D5FA7]/20"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPasscode((v) => !v)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:text-slate-700"
+                    aria-label={showPasscode ? 'Hide password' : 'Show password'}
+                  >
+                    {showPasscode ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {passcodeError && (
+                <div className="rounded-md border border-red-200 bg-red-50 p-3 text-xs text-red-900">
+                  {passcodeError}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={checkingPasscode}
+                className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-md bg-[#0B1F3A] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#16345C] disabled:opacity-60"
+              >
+                <Lock className="h-4 w-4" />
+                <span>{checkingPasscode ? 'Verifying...' : 'Unlock Admin Panel'}</span>
+              </button>
+            </form>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 rounded-md border border-[#99F6E4] bg-[#F0FDFA] px-3.5 py-2.5 text-xs font-medium text-[#0F766E]">
+                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                <span>Admin Panel Password Verified · Step 2: Staff Google Verification</span>
+              </div>
+
+              {authError && (
+                <div className="rounded-md border border-red-200 bg-red-50 p-3.5 text-xs text-red-900">
+                  {authError}
+                </div>
+              )}
+
+              <div className="space-y-2.5">
+                <button
+                  type="button"
+                  disabled={signingIn}
+                  onClick={handleGoogleLogin}
+                  className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-md bg-[#1D5FA7] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#164A84] disabled:opacity-60"
+                >
+                  <span>{signingIn ? 'Signing in...' : 'Sign in with Google'}</span>
+                </button>
+
+                {firebaseUser && !currentAdmin && (
+                  <button
+                    type="button"
+                    onClick={handleLockAndSignOut}
+                    className="flex min-h-[40px] w-full items-center justify-center rounded-md border border-slate-300 bg-white px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    Sign out ({firebaseUser.email})
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setPasscodeUnlocked(false)}
+                  className="flex min-h-[38px] w-full items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                >
+                  Lock Password Screen
+                </button>
+              </div>
             </div>
           )}
 
-          <div className="space-y-3">
-            <button
-              type="button"
-              disabled={signingIn}
-              onClick={handleGoogleLogin}
-              className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-md bg-[#1D5FA7] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#164A84] disabled:opacity-60"
-            >
-              <span>{signingIn ? 'Signing in...' : 'Sign in with Google'}</span>
-            </button>
-
-            {firebaseUser && !currentAdmin && (
-              <button
-                type="button"
-                onClick={() => signOut(auth)}
-                className="flex min-h-[40px] w-full items-center justify-center rounded-md border border-slate-300 bg-white px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
-              >
-                Sign out ({firebaseUser.email})
-              </button>
-            )}
-
-            <button
-              type="button"
-              onClick={onExitToPublic}
-              className="flex min-h-[40px] w-full items-center justify-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100"
-            >
-              <ArrowLeft className="h-3.5 w-3.5" />
-              <span>Return to Public Student Portal</span>
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={onExitToPublic}
+            className="flex min-h-[40px] w-full items-center justify-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            <span>Return to Public Student Portal</span>
+          </button>
         </div>
       </div>
     );
@@ -433,7 +541,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </button>
             <button
               type="button"
-              onClick={() => signOut(auth)}
+              onClick={() => setPasscodeUnlocked(false)}
+              className="flex items-center gap-2 rounded border border-slate-700 px-3 py-1.5 text-slate-200 hover:bg-white/10"
+            >
+              <Lock className="h-3.5 w-3.5" />
+              <span>Lock Panel</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleLockAndSignOut}
               className="flex items-center gap-2 rounded border border-slate-700 px-3 py-1.5 text-slate-300 hover:bg-white/10"
             >
               <LogOut className="h-3.5 w-3.5" />
@@ -483,7 +599,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => signOut(auth)}
+                onClick={() => {
+                  setSidebarOpen(false);
+                  setPasscodeUnlocked(false);
+                }}
+                className="flex w-full items-center gap-2 rounded border border-slate-700 px-3 py-2"
+              >
+                <Lock className="h-3.5 w-3.5" />
+                <span>Lock Panel</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleLockAndSignOut}
                 className="flex w-full items-center gap-2 rounded border border-slate-700 px-3 py-2"
               >
                 <LogOut className="h-3.5 w-3.5" />

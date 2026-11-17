@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { AnimatePresence, motion, MotionConfig } from 'motion/react';
 import {
   AlertCircle,
   ArrowRight,
@@ -9,11 +10,16 @@ import {
   Copy,
   ExternalLink,
   FileText,
+  GraduationCap,
+  Hash,
   Info,
+  Loader2,
   Lock,
   MessageSquare,
   Phone,
+  RefreshCw,
   ShieldCheck,
+  User,
 } from 'lucide-react';
 import {
   AcademySettings,
@@ -54,7 +60,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   const [fullName, setFullName] = useState('');
   const [bcsRegNo, setBcsRegNo] = useState('');
   const [whatsappNumber, setWhatsappNumber] = useState('');
-  const [batchId, setBatchId] = useState(batches[0]?.id || 'special-bcs-crystal');
+  const [batchId, setBatchId] = useState(batches[0]?.id || 'cpr-special-bcs-online');
   const [consentAccepted, setConsentAccepted] = useState(false);
 
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -63,6 +69,24 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   const [submitError, setSubmitError] = useState('');
   const [receipt, setReceipt] = useState<StudentRegistrationReceipt | null>(null);
   const [copiedCode, setCopiedCode] = useState(false);
+  const [regSpinKey, setRegSpinKey] = useState(0);
+
+  // Live Admission Form Completion & 8-Digit Reg Breakdown
+  const isNameValid = fullName.trim().length >= 2;
+  const isPhoneValid = validateWhatsAppPhone(whatsappNumber);
+  const cleanRegDigits = bcsRegNo.trim().replace(/\D/g, '');
+  const isRegValid = /^\d{8}$/.test(cleanRegDigits);
+  const isBatchValid = Boolean(batchId);
+  const completedStepsCount =
+    (isNameValid ? 1 : 0) +
+    (isPhoneValid ? 1 : 0) +
+    (isRegValid ? 1 : 0) +
+    (isBatchValid && consentAccepted ? 1 : 0);
+  const formProgress = completedStepsCount / 4;
+
+  const currentYearTwo = new Date().getFullYear().toString().slice(-2);
+  const phoneDigitsOnly = whatsappNumber.replace(/\D/g, '');
+  const phoneLastThree = phoneDigitsOnly.length >= 3 ? phoneDigitsOnly.slice(-3) : '---';
 
   useEffect(() => {
     if (batches.length > 0 && !batches.some((b) => b.id === batchId)) {
@@ -80,13 +104,38 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   }, [initialFocusSection]);
 
   const handleRegBlur = async () => {
-    if (bcsRegNo.trim().length < 3) return;
+    if (!/^\d{8}$/.test(bcsRegNo.trim())) return;
     try {
       const exists = await checkDuplicateRegNo(bcsRegNo);
       setDuplicateAlert(exists);
     } catch {
       // Ignore transient lookup error on blur
     }
+  };
+
+  const handleAutoBuildRegNo = () => {
+    const phoneDigits = whatsappNumber.replace(/\D/g, '');
+    if (phoneDigits.length < 3) {
+      setFieldErrors((prev) => ({
+        ...prev,
+        whatsappNumber:
+          'রেজিস্ট্রেশন নম্বর তৈরি করতে প্রথমে আপনার WhatsApp নম্বর লিখুন। Enter your WhatsApp number first.',
+      }));
+      return;
+    }
+    const yearTwo = new Date().getFullYear().toString().slice(-2);
+    const lastThree = phoneDigits.slice(-3);
+    const customThree = String(Math.floor(100 + Math.random() * 900));
+    const generated = `${yearTwo}${lastThree}${customThree}`;
+    setBcsRegNo(generated);
+    setRegSpinKey((k) => k + 1);
+    setDuplicateAlert(false);
+    setFieldErrors((prev) => {
+      const next = { ...prev };
+      delete next.bcsRegNo;
+      delete next.whatsappNumber;
+      return next;
+    });
   };
 
   const validateForm = (): boolean => {
@@ -97,10 +146,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         'অনুগ্রহ করে আপনার পূর্ণ নাম লিখুন (কমপক্ষে ২ অক্ষর)। Please enter your full name.';
     }
 
-    const cleanReg = bcsRegNo.trim().replace(/[^a-zA-Z0-9_-]/g, '');
-    if (cleanReg.length < 3 || cleanReg.length > 40) {
+    const cleanReg = bcsRegNo.trim().replace(/\D/g, '');
+    if (!/^\d{8}$/.test(cleanReg)) {
       errors.bcsRegNo =
-        'সঠিক BCS Registration Number প্রদান করুন (৩–৪০ অক্ষর)। Enter a valid BCS Registration Number.';
+        '৮ ডিজিটের সঠিক BCS Registration Number দিন (বছর ২ ডিজিট + মোবাইলের শেষ ৩ ডিজিট + ৩ ডিজিট, যেমন: 26133362)। Enter a valid 8-digit numeric Registration Number.';
     }
 
     if (!validateWhatsAppPhone(whatsappNumber)) {
@@ -134,7 +183,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     try {
       const res = await submitStudentRegistration({
         fullName: fullName.trim(),
-        bcsRegNo: bcsRegNo.trim(),
+        bcsRegNo: bcsRegNo.trim().replace(/\D/g, ''),
         whatsappNumber: whatsappNumber.trim(),
         batchId: selectedBatch.id,
         batchName: selectedBatch.name,
@@ -155,7 +204,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       } else if (err?.message === 'INVALID_REG_NO') {
         setFieldErrors((prev) => ({
           ...prev,
-          bcsRegNo: 'সঠিক BCS Registration Number লিখুন।',
+          bcsRegNo:
+            '৮ ডিজিটের সঠিক BCS Registration Number লিখুন (যেমন: 26133362)। Enter an 8-digit numeric Registration Number.',
         }));
       } else {
         setSubmitError(
@@ -433,321 +483,743 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             </div>
           </div>
 
-          {/* Right Column: Registration Form OR Post-Submission Receipt */}
+          {/* Right Column: Animated Admission Form OR Post-Submission Receipt */}
           <div className="lg:col-span-7">
-            {receipt ? (
-              <div className="rounded-lg border border-[#99F6E4] bg-white p-6 sm:p-8 space-y-6">
-                <div className="flex items-start gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-[#F0FDFA] text-[#0F766E]">
-                    <CheckCircle2 className="h-6 w-6" aria-hidden="true" />
-                  </div>
-                  <div>
-                    <h2 className="font-display text-xl font-bold text-[#0B1F3A]">
-                      আবেদন সফলভাবে জমা হয়েছে · Verification Submitted
-                    </h2>
-                    <p className="mt-1 text-sm text-slate-600">
-                      আপনার তথ্য CPR Medical Academy-তে জমা হয়েছে। অফিস থেকে পরিচয় ও পেমেন্ট যাচাই করার পর আপনাকে WhatsApp Group-এ যুক্ত করা হবে।
-                    </p>
-                  </div>
-                </div>
-
-                <div className="rounded-md border border-slate-200 bg-slate-50 p-5 space-y-4">
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <div>
-                      <p className="text-xs text-slate-500">Application / Reference ID</p>
-                      <p className="mt-0.5 font-mono text-base font-semibold text-[#0B1F3A] tabular-nums">
-                        {receipt.applicationId}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-slate-500">Secure Verification Code (Save This)</p>
-                      <p className="mt-0.5 font-mono text-base font-bold text-[#1D5FA7] tabular-nums">
-                        {receipt.verificationCode}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-slate-500">Candidate Name</p>
-                      <p className="mt-0.5 text-sm font-medium text-slate-900">{receipt.fullName}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-slate-500">BCS Registration Number</p>
-                      <p className="mt-0.5 font-mono text-sm font-medium text-slate-900 tabular-nums">
-                        {receipt.bcsRegNo}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="border-t border-slate-200 pt-4 flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-xs text-amber-800 font-medium">
-                      স্ট্যাটাস চেক করতে আপনার BCS Registration Number ও Verification Code সংরক্ষণ করুন।
-                    </p>
-                    <button
-                      type="button"
-                      onClick={copyCredentials}
-                      className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 whitespace-nowrap shrink-0"
-                    >
-                      {copiedCode ? (
-                        <>
-                          <Check className="h-3.5 w-3.5 text-[#0F766E]" />
-                          <span>Copied</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="h-3.5 w-3.5" />
-                          <span>Copy Receipt</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="rounded-md border border-slate-200 bg-[#EFF6FF]/60 p-4 text-xs leading-relaxed text-slate-700">
-                  <strong>Important:</strong> Submitting this form sets your status to{' '}
-                  <span className="font-mono font-semibold">Submitted</span> and payment status to{' '}
-                  <span className="font-mono font-semibold">Pending</span>. Access to the official WhatsApp group and restricted exam results is granted only after manual office approval.
-                </div>
-
-                <div className="rounded-md border border-[#99F6E4] bg-[#F0FDFA] p-4 space-y-3">
-                  <p className="text-xs font-semibold text-[#0F766E]">
-                    সরাসরি অফিসের WhatsApp-এ আপনার তথ্য পাঠান ({settings.contactPhone})
-                  </p>
-                  <p className="text-xs text-slate-700">
-                    নিচের বাটনে ক্লিক করলে আপনার নাম, BCS Registration Number ও Application ID সহ সরাসরি অফিসের WhatsApp নাম্বারে চলে যাবে।
-                  </p>
-                  <a
-                    href={buildWhatsAppLink(
-                      settings.officeWhatsapp,
-                      `Assalamu Alaikum CPR Medical Academy,\nI have submitted my BCS Batch Student Verification form.\n\nApplication ID: ${receipt.applicationId}\nName: ${receipt.fullName}\nBCS Reg No: ${receipt.bcsRegNo}\nWhatsApp: ${receipt.whatsappNumber}\nBatch: ${receipt.batchName}\n\nPlease verify my details and payment.`
-                    )}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-md bg-[#0F766E] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#0D625B] sm:w-auto"
+            <MotionConfig reducedMotion="user">
+              <AnimatePresence mode="wait">
+                {receipt ? (
+                  <motion.div
+                    key="submission-receipt"
+                    initial={{ opacity: 0, y: 16 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -12 }}
+                    transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+                    className="rounded-lg border border-[#99F6E4] bg-white p-6 sm:p-8 space-y-6 shadow-sm"
                   >
-                    <MessageSquare className="h-4 w-4 shrink-0" aria-hidden="true" />
-                    <span>WhatsApp-এ সরাসরি পাঠান ({settings.contactPhone})</span>
-                    <ExternalLink className="h-4 w-4 shrink-0" aria-hidden="true" />
-                  </a>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-3 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => onNavigate('status')}
-                    className="inline-flex min-h-[44px] items-center gap-2 rounded-md bg-[#1D5FA7] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#164A84] whitespace-nowrap shrink-0"
-                  >
-                    <span>Go to Status Check</span>
-                    <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setReceipt(null)}
-                    className="inline-flex min-h-[44px] items-center rounded-md border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 whitespace-nowrap shrink-0"
-                  >
-                    Submit Another Candidate
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <form
-                onSubmit={handleSubmit}
-                noValidate
-                className="rounded-lg border border-slate-200 bg-white p-6 sm:p-8 space-y-6"
-              >
-                <div className="border-b border-slate-200 pb-4">
-                  <h2 className="font-display text-xl font-bold text-[#0B1F3A]">
-                    {lang === 'bn'
-                      ? 'শিক্ষার্থী তথ্য যাচাইকরণ ফর্ম'
-                      : 'BCS Student Verification Form'}
-                  </h2>
-                  <p className="mt-1 text-sm text-slate-600">
-                    {lang === 'bn'
-                      ? 'সকল (*) চিহ্নিত ঘর সঠিকভাবে পূরণ করুন। প্রতিটি BCS Registration Number কেবল একবার জমা দেওয়া যাবে।'
-                      : 'Complete all required fields accurately. Each BCS Registration Number can only be registered once.'}
-                  </p>
-                </div>
-
-                {duplicateAlert && (
-                  <div
-                    role="alert"
-                    className="rounded-md border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 space-y-2.5"
-                  >
-                    <div className="flex items-start gap-2.5">
-                      <AlertCircle className="mt-0.5 h-5 w-5 text-amber-700 shrink-0" aria-hidden="true" />
+                    <div className="flex items-start gap-3">
+                      <motion.div
+                        initial={{ scale: 0.75, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        transition={{ duration: 0.25, delay: 0.06, ease: [0.16, 1, 0.3, 1] }}
+                        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-[#F0FDFA] text-[#0F766E] border border-[#99F6E4]"
+                      >
+                        <CheckCircle2 className="h-6 w-6" aria-hidden="true" />
+                      </motion.div>
                       <div>
-                        <p className="font-semibold">
-                          এই BCS Registration Number-টি ইতোমধ্যে নিবন্ধিত রয়েছে (Duplicate Registration Detected)
-                        </p>
-                        <p className="mt-1 text-xs leading-relaxed text-amber-900">
-                          আপনি ইতোপূর্বে তথ্য জমা দিয়ে থাকলে আপনার Verification Code দিয়ে Status Check পেজ থেকে বর্তমান অবস্থা দেখুন বা তথ্য সংশোধনের অনুরোধ পাঠান। কোড হারিয়ে গেলে অফিসে যোগাযোগ করুন।
+                        <h2 className="font-display text-xl font-bold text-[#0B1F3A]">
+                          আবেদন সফলভাবে জমা হয়েছে · Verification Submitted
+                        </h2>
+                        <p className="mt-1 text-sm text-slate-600">
+                          আপনার তথ্য CPR Medical Academy-তে জমা হয়েছে। অফিস থেকে পরিচয় ও পেমেন্ট যাচাই করার পর আপনাকে WhatsApp Group-এ যুক্ত করা হবে।
                         </p>
                       </div>
                     </div>
-                    <div className="flex flex-wrap gap-2 pl-7">
-                      <button
-                        type="button"
-                        onClick={() => onNavigate('status')}
-                        className="rounded-md bg-[#0B1F3A] px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-[#16345C]"
-                      >
-                        Check Status / Request Correction
-                      </button>
-                      <a
+
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.25, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
+                      className="rounded-md border border-slate-200 bg-slate-50 p-5 space-y-4"
+                    >
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div>
+                          <p className="text-xs text-slate-500">Application / Reference ID</p>
+                          <p className="mt-0.5 font-mono text-base font-semibold text-[#0B1F3A] tabular-nums">
+                            {receipt.applicationId}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-slate-500">Secure Verification Code (Save This)</p>
+                          <p className="mt-0.5 font-mono text-base font-bold text-[#1D5FA7] tabular-nums">
+                            {receipt.verificationCode}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-slate-500">Candidate Name</p>
+                          <p className="mt-0.5 text-sm font-medium text-slate-900">{receipt.fullName}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-slate-500">BCS Registration Number</p>
+                          <p className="mt-0.5 font-mono text-sm font-medium text-slate-900 tabular-nums">
+                            {receipt.bcsRegNo}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="border-t border-slate-200 pt-4 flex flex-wrap items-center justify-between gap-3">
+                        <p className="text-xs text-amber-800 font-medium">
+                          স্ট্যাটাস চেক করতে আপনার BCS Registration Number ও Verification Code সংরক্ষণ করুন।
+                        </p>
+                        <motion.button
+                          type="button"
+                          whileTap={{ scale: 0.96 }}
+                          onClick={copyCredentials}
+                          className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 whitespace-nowrap shrink-0"
+                        >
+                          {copiedCode ? (
+                            <>
+                              <Check className="h-3.5 w-3.5 text-[#0F766E]" />
+                              <span>Copied</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="h-3.5 w-3.5" />
+                              <span>Copy Receipt</span>
+                            </>
+                          )}
+                        </motion.button>
+                      </div>
+                    </motion.div>
+
+                    <div className="rounded-md border border-slate-200 bg-[#EFF6FF]/60 p-4 text-xs leading-relaxed text-slate-700">
+                      <strong>Important:</strong> Submitting this form sets your status to{' '}
+                      <span className="font-mono font-semibold">Submitted</span> and payment status to{' '}
+                      <span className="font-mono font-semibold">Pending</span>. Access to the official WhatsApp group and restricted exam results is granted only after manual office approval.
+                    </div>
+
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.25, delay: 0.16, ease: [0.16, 1, 0.3, 1] }}
+                      className="rounded-md border border-[#99F6E4] bg-[#F0FDFA] p-4 space-y-3"
+                    >
+                      <p className="text-xs font-semibold text-[#0F766E]">
+                        সরাসরি অফিসের WhatsApp-এ আপনার তথ্য পাঠান ({settings.contactPhone})
+                      </p>
+                      <p className="text-xs text-slate-700">
+                        নিচের বাটনে ক্লিক করলে আপনার নাম, BCS Registration Number ও Application ID সহ সরাসরি অফিসের WhatsApp নাম্বারে চলে যাবে।
+                      </p>
+                      <motion.a
+                        whileHover={{ y: -1 }}
+                        whileTap={{ scale: 0.98 }}
                         href={buildWhatsAppLink(
                           settings.officeWhatsapp,
-                          `Assalamu Alaikum, I need help with my duplicate BCS registration number: ${bcsRegNo}`
+                          `Assalamu Alaikum CPR Medical Academy,\nI have submitted my BCS Batch Student Verification form.\n\nApplication ID: ${receipt.applicationId}\nName: ${receipt.fullName}\nBCS Reg No: ${receipt.bcsRegNo}\nWhatsApp: ${receipt.whatsappNumber}\nBatch: ${receipt.batchName}\n\nPlease verify my details and payment.`
                         )}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="rounded-md border border-amber-400 bg-white px-3.5 py-1.5 text-xs font-semibold text-amber-950 hover:bg-amber-100"
+                        className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-md bg-[#0F766E] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#0D625B] sm:w-auto"
                       >
-                        Contact CPR Office
-                      </a>
-                    </div>
-                  </div>
-                )}
+                        <MessageSquare className="h-4 w-4 shrink-0" aria-hidden="true" />
+                        <span>WhatsApp-এ সরাসরি পাঠান ({settings.contactPhone})</span>
+                        <ExternalLink className="h-4 w-4 shrink-0" aria-hidden="true" />
+                      </motion.a>
+                    </motion.div>
 
-                {submitError && !duplicateAlert && (
-                  <div
-                    role="alert"
-                    className="flex items-start gap-2.5 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-900"
+                    <div className="flex flex-wrap items-center gap-3 pt-1">
+                      <motion.button
+                        type="button"
+                        whileHover={{ y: -1 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => onNavigate('status')}
+                        className="inline-flex min-h-[44px] items-center gap-2 rounded-md bg-[#1D5FA7] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#164A84] whitespace-nowrap shrink-0"
+                      >
+                        <span>Go to Status Check</span>
+                        <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                      </motion.button>
+                      <button
+                        type="button"
+                        onClick={() => setReceipt(null)}
+                        className="inline-flex min-h-[44px] items-center rounded-md border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 whitespace-nowrap shrink-0"
+                      >
+                        Submit Another Candidate
+                      </button>
+                    </div>
+                  </motion.div>
+                ) : (
+                  <motion.form
+                    key="admission-form"
+                    initial={{ opacity: 0, y: 14 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -12 }}
+                    transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                    onSubmit={handleSubmit}
+                    noValidate
+                    className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm"
                   >
-                    <AlertCircle className="mt-0.5 h-5 w-5 text-red-700 shrink-0" aria-hidden="true" />
-                    <span>{submitError}</span>
-                  </div>
+                    {/* Animated Live Completion Progress Rail */}
+                    <div className="h-1 w-full bg-slate-100 overflow-hidden" aria-hidden="true">
+                      <motion.div
+                        className="h-full w-full bg-gradient-to-r from-[#1D5FA7] to-[#0F766E]"
+                        style={{ transformOrigin: 'left' }}
+                        initial={{ scaleX: 0 }}
+                        animate={{ scaleX: formProgress }}
+                        transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
+                      />
+                    </div>
+
+                    <div className="p-6 sm:p-8 space-y-6">
+                      {/* Header & Step Progress Strip */}
+                      <div className="border-b border-slate-200 pb-5 space-y-4">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div>
+                            <h2 className="font-display text-xl font-bold text-[#0B1F3A]">
+                              {lang === 'bn'
+                                ? 'শিক্ষার্থী ভর্তি ও তথ্য যাচাইকরণ ফর্ম'
+                                : 'BCS Student Admission & Verification Form'}
+                            </h2>
+                            <p className="mt-1 text-sm text-slate-600">
+                              {lang === 'bn'
+                                ? 'সকল (*) চিহ্নিত ঘর সঠিকভাবে পূরণ করুন। প্রতিটি BCS Registration Number কেবল একবার জমা দেওয়া যাবে।'
+                                : 'Complete all required fields accurately. Each BCS Registration Number can only be registered once.'}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <span className="font-mono text-xs font-semibold text-[#0B1F3A] tabular-nums">
+                              {completedStepsCount}/4
+                            </span>
+                            <p className="text-[11px] text-slate-500">
+                              {lang === 'bn' ? 'ধাপ সম্পন্ন' : 'Completed'}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Interactive 4-Step Checklist */}
+                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                          {[
+                            { label: lang === 'bn' ? '১. পূর্ণ নাম' : '1. Full Name', done: isNameValid },
+                            { label: lang === 'bn' ? '২. WhatsApp' : '2. WhatsApp', done: isPhoneValid },
+                            { label: lang === 'bn' ? '৩. রেজি. নম্বর' : '3. 8-Digit Reg', done: isRegValid },
+                            { label: lang === 'bn' ? '৪. ব্যাচ ও সম্মতি' : '4. Batch & Consent', done: isBatchValid && consentAccepted },
+                          ].map((stepItem) => (
+                            <div
+                              key={stepItem.label}
+                              className={`flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs transition-colors duration-150 ${
+                                stepItem.done
+                                  ? 'border-[#99F6E4] bg-[#F0FDFA] text-[#0F766E] font-medium'
+                                  : 'border-slate-200 bg-slate-50/70 text-slate-500'
+                              }`}
+                            >
+                              <span
+                                className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-sm transition-colors ${
+                                  stepItem.done ? 'bg-[#0F766E] text-white' : 'bg-slate-200 text-slate-500'
+                                }`}
+                              >
+                                <AnimatePresence mode="wait">
+                                  {stepItem.done ? (
+                                    <motion.span
+                                      key="check"
+                                      initial={{ scale: 0.4, opacity: 0 }}
+                                      animate={{ scale: 1, opacity: 1 }}
+                                      exit={{ scale: 0.4, opacity: 0 }}
+                                      transition={{ duration: 0.15 }}
+                                    >
+                                      <Check className="h-3 w-3" strokeWidth={3} />
+                                    </motion.span>
+                                  ) : (
+                                    <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
+                                  )}
+                                </AnimatePresence>
+                              </span>
+                              <span className="truncate">{stepItem.label}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <AnimatePresence>
+                        {duplicateAlert && (
+                          <motion.div
+                            key="duplicate-alert"
+                            role="alert"
+                            initial={{ opacity: 0, y: -6 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -6 }}
+                            transition={{ duration: 0.18 }}
+                            className="rounded-md border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 space-y-2.5"
+                          >
+                            <div className="flex items-start gap-2.5">
+                              <AlertCircle className="mt-0.5 h-5 w-5 text-amber-700 shrink-0" aria-hidden="true" />
+                              <div>
+                                <p className="font-semibold">
+                                  এই BCS Registration Number-টি ইতোমধ্যে নিবন্ধিত রয়েছে (Duplicate Registration Detected)
+                                </p>
+                                <p className="mt-1 text-xs leading-relaxed text-amber-900">
+                                  আপনি ইতোপূর্বে তথ্য জমা দিয়ে থাকলে আপনার Verification Code দিয়ে Status Check পেজ থেকে বর্তমান অবস্থা দেখুন বা তথ্য সংশোধনের অনুরোধ পাঠান। কোড হারিয়ে গেলে অফিসে যোগাযোগ করুন।
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex flex-wrap gap-2 pl-7">
+                              <button
+                                type="button"
+                                onClick={() => onNavigate('status')}
+                                className="rounded-md bg-[#0B1F3A] px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-[#16345C]"
+                              >
+                                Check Status / Request Correction
+                              </button>
+                              <a
+                                href={buildWhatsAppLink(
+                                  settings.officeWhatsapp,
+                                  `Assalamu Alaikum, I need help with my duplicate BCS registration number: ${bcsRegNo}`
+                                )}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="rounded-md border border-amber-400 bg-white px-3.5 py-1.5 text-xs font-semibold text-amber-950 hover:bg-amber-100"
+                              >
+                                Contact CPR Office
+                              </a>
+                            </div>
+                          </motion.div>
+                        )}
+
+                        {submitError && !duplicateAlert && (
+                          <motion.div
+                            key="submit-error"
+                            role="alert"
+                            initial={{ opacity: 0, y: -6 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -6 }}
+                            transition={{ duration: 0.18 }}
+                            className="flex items-start gap-2.5 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-900"
+                          >
+                            <AlertCircle className="mt-0.5 h-5 w-5 text-red-700 shrink-0" aria-hidden="true" />
+                            <span>{submitError}</span>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+
+                      <div className="space-y-5">
+                        {/* Full Name */}
+                        <div>
+                          <div className="flex items-center justify-between gap-2">
+                            <label
+                              htmlFor="fullName"
+                              className="block text-sm font-medium text-[#0B1F3A]"
+                            >
+                              Full Name (পূর্ণ নাম) <span className="text-red-600">*</span>
+                            </label>
+                            <AnimatePresence>
+                              {isNameValid && (
+                                <motion.span
+                                  initial={{ opacity: 0, scale: 0.8 }}
+                                  animate={{ opacity: 1, scale: 1 }}
+                                  exit={{ opacity: 0, scale: 0.8 }}
+                                  transition={{ duration: 0.15 }}
+                                  className="inline-flex items-center gap-1 text-[11px] font-medium text-[#0F766E]"
+                                >
+                                  <Check className="h-3.5 w-3.5" />
+                                  <span>Valid</span>
+                                </motion.span>
+                              )}
+                            </AnimatePresence>
+                          </div>
+                          <div className="relative mt-1.5">
+                            <User
+                              className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+                              aria-hidden="true"
+                            />
+                            <input
+                              id="fullName"
+                              type="text"
+                              required
+                              value={fullName}
+                              onChange={(e) => {
+                                setFullName(e.target.value);
+                                if (fieldErrors.fullName) {
+                                  setFieldErrors((prev) => {
+                                    const next = { ...prev };
+                                    delete next.fullName;
+                                    return next;
+                                  });
+                                }
+                              }}
+                              placeholder="Dr. Md. Ashraful Islam"
+                              maxLength={140}
+                              className={`block w-full rounded-md border bg-white pl-10 pr-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 transition-colors focus:outline-none focus:ring-2 ${
+                                fieldErrors.fullName
+                                  ? 'border-red-400 focus:border-red-500 focus:ring-red-200'
+                                  : isNameValid
+                                  ? 'border-[#0F766E]/60 focus:border-[#0F766E] focus:ring-[#0F766E]/20'
+                                  : 'border-slate-300 focus:border-[#1D5FA7] focus:ring-[#1D5FA7]/20'
+                              }`}
+                            />
+                          </div>
+                          <AnimatePresence>
+                            {fieldErrors.fullName && (
+                              <motion.p
+                                initial={{ opacity: 0, y: -4 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -4 }}
+                                transition={{ duration: 0.16 }}
+                                className="mt-1.5 text-xs text-red-700"
+                              >
+                                {fieldErrors.fullName}
+                              </motion.p>
+                            )}
+                          </AnimatePresence>
+                        </div>
+
+                        {/* WhatsApp & 8-Digit BCS Reg No */}
+                        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                          <div>
+                            <div className="flex items-center justify-between gap-2">
+                              <label
+                                htmlFor="whatsappNumber"
+                                className="block text-sm font-medium text-[#0B1F3A]"
+                              >
+                                WhatsApp Number <span className="text-red-600">*</span>
+                              </label>
+                              <AnimatePresence>
+                                {isPhoneValid && (
+                                  <motion.span
+                                    initial={{ opacity: 0, scale: 0.8 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    exit={{ opacity: 0, scale: 0.8 }}
+                                    transition={{ duration: 0.15 }}
+                                    className="inline-flex items-center gap-1 text-[11px] font-medium text-[#0F766E]"
+                                  >
+                                    <Check className="h-3.5 w-3.5" />
+                                    <span>Valid</span>
+                                  </motion.span>
+                                )}
+                              </AnimatePresence>
+                            </div>
+                            <div className="relative mt-1.5">
+                              <Phone
+                                className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+                                aria-hidden="true"
+                              />
+                              <input
+                                id="whatsappNumber"
+                                type="tel"
+                                required
+                                value={whatsappNumber}
+                                onChange={(e) => {
+                                  setWhatsappNumber(e.target.value);
+                                  if (fieldErrors.whatsappNumber) {
+                                    setFieldErrors((prev) => {
+                                      const next = { ...prev };
+                                      delete next.whatsappNumber;
+                                      return next;
+                                    });
+                                  }
+                                }}
+                                placeholder="018XXXXXXXX"
+                                maxLength={24}
+                                className={`block w-full rounded-md border bg-white pl-10 pr-4 py-2.5 font-mono text-sm text-slate-900 placeholder:font-sans placeholder:text-slate-400 transition-colors focus:outline-none focus:ring-2 ${
+                                  fieldErrors.whatsappNumber
+                                    ? 'border-red-400 focus:border-red-500 focus:ring-red-200'
+                                    : isPhoneValid
+                                    ? 'border-[#0F766E]/60 focus:border-[#0F766E] focus:ring-[#0F766E]/20'
+                                    : 'border-slate-300 focus:border-[#1D5FA7] focus:ring-[#1D5FA7]/20'
+                                }`}
+                              />
+                            </div>
+                            <AnimatePresence mode="wait">
+                              {fieldErrors.whatsappNumber ? (
+                                <motion.p
+                                  key="wa-err"
+                                  initial={{ opacity: 0, y: -4 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  exit={{ opacity: 0, y: -4 }}
+                                  transition={{ duration: 0.16 }}
+                                  className="mt-1.5 text-xs text-red-700"
+                                >
+                                  {fieldErrors.whatsappNumber}
+                                </motion.p>
+                              ) : (
+                                <p className="mt-1.5 text-[11px] text-slate-500">
+                                  মোবাইলের শেষ ৩ ডিজিট (<span className="font-mono font-semibold text-[#0B1F3A]">{phoneLastThree}</span>) রেজিস্ট্রেশন নম্বরে ব্যবহৃত হবে।
+                                </p>
+                              )}
+                            </AnimatePresence>
+                          </div>
+
+                          <div>
+                            <div className="flex items-center justify-between gap-2">
+                              <label
+                                htmlFor="bcsRegNo"
+                                className="block text-sm font-medium text-[#0B1F3A]"
+                              >
+                                BCS Reg. No (8 Digits) <span className="text-red-600">*</span>
+                              </label>
+                              <motion.button
+                                type="button"
+                                whileTap={{ scale: 0.94 }}
+                                onClick={handleAutoBuildRegNo}
+                                className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-semibold text-[#1D5FA7] hover:bg-[#EFF6FF] transition-colors whitespace-nowrap shrink-0"
+                              >
+                                <motion.span
+                                  key={regSpinKey}
+                                  initial={{ rotate: 0 }}
+                                  animate={{ rotate: regSpinKey > 0 ? 180 : 0 }}
+                                  transition={{ duration: 0.3 }}
+                                >
+                                  <RefreshCw className="h-3 w-3" aria-hidden="true" />
+                                </motion.span>
+                                <span>Auto-fill (তৈরি করুন)</span>
+                              </motion.button>
+                            </div>
+                            <div className="relative mt-1.5">
+                              <Hash
+                                className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+                                aria-hidden="true"
+                              />
+                              <input
+                                id="bcsRegNo"
+                                type="text"
+                                inputMode="numeric"
+                                required
+                                value={bcsRegNo}
+                                onChange={(e) => {
+                                  setBcsRegNo(e.target.value.replace(/\D/g, '').slice(0, 8));
+                                  setDuplicateAlert(false);
+                                  if (fieldErrors.bcsRegNo) {
+                                    setFieldErrors((prev) => {
+                                      const next = { ...prev };
+                                      delete next.bcsRegNo;
+                                      return next;
+                                    });
+                                  }
+                                }}
+                                onBlur={handleRegBlur}
+                                placeholder="e.g. 26133362"
+                                maxLength={8}
+                                className={`block w-full rounded-md border bg-white pl-10 pr-14 py-2.5 font-mono text-sm tracking-wider text-slate-900 placeholder:font-sans placeholder:tracking-normal placeholder:text-slate-400 transition-colors focus:outline-none focus:ring-2 ${
+                                  fieldErrors.bcsRegNo
+                                    ? 'border-red-400 focus:border-red-500 focus:ring-red-200'
+                                    : isRegValid
+                                    ? 'border-[#0F766E]/60 focus:border-[#0F766E] focus:ring-[#0F766E]/20'
+                                    : 'border-slate-300 focus:border-[#1D5FA7] focus:ring-[#1D5FA7]/20'
+                                }`}
+                              />
+                              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 font-mono text-[11px] text-slate-400 tabular-nums">
+                                {cleanRegDigits.length}/8
+                              </span>
+                            </div>
+
+                            {/* Live 8-Digit Structure Breakdown */}
+                            <div className="mt-2 grid grid-cols-3 gap-1.5 text-center">
+                              <div className="rounded border border-slate-200 bg-slate-50 px-1.5 py-1">
+                                <p className="text-[10px] text-slate-500">বছর (২)</p>
+                                <p className="font-mono text-xs font-semibold text-[#0B1F3A] tabular-nums">
+                                  {cleanRegDigits.slice(0, 2) || currentYearTwo}
+                                </p>
+                              </div>
+                              <div className="rounded border border-slate-200 bg-slate-50 px-1.5 py-1">
+                                <p className="text-[10px] text-slate-500">মোবাইল শেষ ৩</p>
+                                <p className="font-mono text-xs font-semibold text-[#1D5FA7] tabular-nums">
+                                  {cleanRegDigits.slice(2, 5) || phoneLastThree}
+                                </p>
+                              </div>
+                              <div className="rounded border border-slate-200 bg-slate-50 px-1.5 py-1">
+                                <p className="text-[10px] text-slate-500">পছন্দের ৩</p>
+                                <p className="font-mono text-xs font-semibold text-[#0F766E] tabular-nums">
+                                  {cleanRegDigits.slice(5, 8) || '---'}
+                                </p>
+                              </div>
+                            </div>
+
+                            <AnimatePresence>
+                              {fieldErrors.bcsRegNo && (
+                                <motion.p
+                                  initial={{ opacity: 0, y: -4 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  exit={{ opacity: 0, y: -4 }}
+                                  transition={{ duration: 0.16 }}
+                                  className="mt-1.5 text-xs text-red-700"
+                                >
+                                  {fieldErrors.bcsRegNo}
+                                </motion.p>
+                              )}
+                            </AnimatePresence>
+                          </div>
+                        </div>
+
+                        {/* Interactive Batch Selection Cards */}
+                        <div>
+                          <label
+                            id="batch-selection-label"
+                            className="block text-sm font-medium text-[#0B1F3A]"
+                          >
+                            Batch Selection (ব্যাচ নির্বাচন) <span className="text-red-600">*</span>
+                          </label>
+                          <div
+                            role="radiogroup"
+                            aria-labelledby="batch-selection-label"
+                            className="mt-2 grid grid-cols-1 gap-2.5 sm:grid-cols-2"
+                          >
+                            {batches.map((b) => {
+                              const isSelected = batchId === b.id;
+                              return (
+                                <motion.button
+                                  key={b.id}
+                                  type="button"
+                                  role="radio"
+                                  aria-checked={isSelected}
+                                  whileHover={{ y: -1 }}
+                                  whileTap={{ scale: 0.985 }}
+                                  transition={{ duration: 0.14 }}
+                                  onClick={() => {
+                                    setBatchId(b.id);
+                                    if (fieldErrors.batchId) {
+                                      setFieldErrors((prev) => {
+                                        const next = { ...prev };
+                                        delete next.batchId;
+                                        return next;
+                                      });
+                                    }
+                                  }}
+                                  className={`relative flex items-start justify-between gap-2 rounded-md border p-3 text-left transition-colors duration-150 ${
+                                    isSelected
+                                      ? 'border-[#1D5FA7] bg-[#EFF6FF]/70 text-[#0B1F3A]'
+                                      : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50/70'
+                                  }`}
+                                >
+                                  <div className="min-w-0 space-y-0.5">
+                                    <div className="flex items-center gap-1.5">
+                                      <GraduationCap
+                                        className={`h-3.5 w-3.5 shrink-0 ${
+                                          isSelected ? 'text-[#1D5FA7]' : 'text-slate-400'
+                                        }`}
+                                        aria-hidden="true"
+                                      />
+                                      <span className="text-xs font-semibold leading-snug">
+                                        {b.name}
+                                      </span>
+                                    </div>
+                                    {b.description && (
+                                      <p className="text-[11px] leading-snug text-slate-500 line-clamp-2">
+                                        {b.description}
+                                      </p>
+                                    )}
+                                  </div>
+                                  <span
+                                    className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-colors ${
+                                      isSelected
+                                        ? 'border-[#1D5FA7] bg-[#1D5FA7] text-white'
+                                        : 'border-slate-300 bg-white'
+                                    }`}
+                                  >
+                                    {isSelected && (
+                                      <motion.span
+                                        initial={{ scale: 0 }}
+                                        animate={{ scale: 1 }}
+                                        transition={{ duration: 0.14 }}
+                                      >
+                                        <Check className="h-2.5 w-2.5" strokeWidth={3} />
+                                      </motion.span>
+                                    )}
+                                  </span>
+                                </motion.button>
+                              );
+                            })}
+                          </div>
+                          <AnimatePresence>
+                            {fieldErrors.batchId && (
+                              <motion.p
+                                initial={{ opacity: 0, y: -4 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -4 }}
+                                transition={{ duration: 0.16 }}
+                                className="mt-1.5 text-xs text-red-700"
+                              >
+                                {fieldErrors.batchId}
+                              </motion.p>
+                            )}
+                          </AnimatePresence>
+                        </div>
+
+                        {/* Animated Consent Checkbox Card */}
+                        <motion.div
+                          animate={{
+                            backgroundColor: consentAccepted ? '#F0FDFA' : '#F8FAFC',
+                            borderColor: fieldErrors.consentAccepted
+                              ? '#F87171'
+                              : consentAccepted
+                              ? '#99F6E4'
+                              : '#E2E8F0',
+                          }}
+                          transition={{ duration: 0.18 }}
+                          className="rounded-md border p-4"
+                        >
+                          <label className="flex cursor-pointer items-start gap-3">
+                            <input
+                              type="checkbox"
+                              checked={consentAccepted}
+                              onChange={(e) => {
+                                setConsentAccepted(e.target.checked);
+                                if (fieldErrors.consentAccepted) {
+                                  setFieldErrors((prev) => {
+                                    const next = { ...prev };
+                                    delete next.consentAccepted;
+                                    return next;
+                                  });
+                                }
+                              }}
+                              className="sr-only"
+                            />
+                            <span
+                              aria-hidden="true"
+                              className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-colors duration-150 ${
+                                consentAccepted
+                                  ? 'border-[#0F766E] bg-[#0F766E] text-white'
+                                  : 'border-slate-300 bg-white text-transparent'
+                              }`}
+                            >
+                              <svg className="h-3.5 w-3.5" viewBox="0 0 14 14" fill="none">
+                                <motion.path
+                                  d="M2.5 7.5L5.5 10.5L11.5 3.5"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  initial={false}
+                                  animate={{ pathLength: consentAccepted ? 1 : 0, opacity: consentAccepted ? 1 : 0 }}
+                                  transition={{ duration: 0.18, ease: 'easeOut' }}
+                                />
+                              </svg>
+                            </span>
+                            <span className="text-xs leading-relaxed text-slate-700">
+                              আমি নিশ্চিত করছি যে প্রদত্ত নাম, BCS Registration Number, WhatsApp Number ও ব্যাচের তথ্য সম্পূর্ণ সঠিক। অফিস থেকে পরিচয় ও পেমেন্ট যাচাই সম্পন্ন হওয়ার পর আমাকে অফিসিয়াল WhatsApp Group-এ যুক্ত করা হবে। (I confirm all submitted information is accurate and understand admin approval is mandatory.)
+                            </span>
+                          </label>
+                          <AnimatePresence>
+                            {fieldErrors.consentAccepted && (
+                              <motion.p
+                                initial={{ opacity: 0, y: -4 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -4 }}
+                                transition={{ duration: 0.16 }}
+                                className="mt-2 text-xs text-red-700"
+                              >
+                                {fieldErrors.consentAccepted}
+                              </motion.p>
+                            )}
+                          </AnimatePresence>
+                        </motion.div>
+                      </div>
+
+                      <div className="flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
+                        <p className="text-xs text-slate-500">
+                          All submissions enter manual review queue immediately.
+                        </p>
+                        <motion.button
+                          type="submit"
+                          disabled={submitting}
+                          whileHover={submitting ? undefined : { y: -1 }}
+                          whileTap={submitting ? undefined : { scale: 0.98 }}
+                          transition={{ duration: 0.15 }}
+                          className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-md bg-[#1D5FA7] px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#164A84] disabled:opacity-60 whitespace-nowrap shrink-0"
+                        >
+                          {submitting ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                              <span>Submitting...</span>
+                            </>
+                          ) : (
+                            <>
+                              <span>Submit Verification Information</span>
+                              <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                            </>
+                          )}
+                        </motion.button>
+                      </div>
+                    </div>
+                  </motion.form>
                 )}
-
-                <div className="space-y-5">
-                  {/* Full Name */}
-                  <div>
-                    <label
-                      htmlFor="fullName"
-                      className="block text-sm font-medium text-[#0B1F3A]"
-                    >
-                      Full Name (পূর্ণ নাম) <span className="text-red-600">*</span>
-                    </label>
-                    <input
-                      id="fullName"
-                      type="text"
-                      required
-                      value={fullName}
-                      onChange={(e) => setFullName(e.target.value)}
-                      placeholder="Dr. Md. Ashraful Islam"
-                      maxLength={140}
-                      className="mt-1.5 block w-full rounded-md border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-[#1D5FA7] focus:outline-none focus:ring-2 focus:ring-[#1D5FA7]/20"
-                    />
-                    {fieldErrors.fullName && (
-                      <p className="mt-1.5 text-xs text-red-700">{fieldErrors.fullName}</p>
-                    )}
-                  </div>
-
-                  {/* BCS Reg No & WhatsApp */}
-                  <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-                    <div>
-                      <label
-                        htmlFor="bcsRegNo"
-                        className="block text-sm font-medium text-[#0B1F3A]"
-                      >
-                        BCS Registration Number <span className="text-red-600">*</span>
-                      </label>
-                      <input
-                        id="bcsRegNo"
-                        type="text"
-                        required
-                        value={bcsRegNo}
-                        onChange={(e) => {
-                          setBcsRegNo(e.target.value);
-                          setDuplicateAlert(false);
-                        }}
-                        onBlur={handleRegBlur}
-                        placeholder="e.g. 46-102945"
-                        maxLength={40}
-                        className="mt-1.5 block w-full rounded-md border border-slate-300 bg-white px-3.5 py-2.5 font-mono text-sm text-slate-900 placeholder:font-sans placeholder:text-slate-400 focus:border-[#1D5FA7] focus:outline-none focus:ring-2 focus:ring-[#1D5FA7]/20"
-                      />
-                      {fieldErrors.bcsRegNo && (
-                        <p className="mt-1.5 text-xs text-red-700">{fieldErrors.bcsRegNo}</p>
-                      )}
-                    </div>
-
-                    <div>
-                      <label
-                        htmlFor="whatsappNumber"
-                        className="block text-sm font-medium text-[#0B1F3A]"
-                      >
-                        WhatsApp Number <span className="text-red-600">*</span>
-                      </label>
-                      <input
-                        id="whatsappNumber"
-                        type="tel"
-                        required
-                        value={whatsappNumber}
-                        onChange={(e) => setWhatsappNumber(e.target.value)}
-                        placeholder="017XXXXXXXX"
-                        maxLength={24}
-                        className="mt-1.5 block w-full rounded-md border border-slate-300 bg-white px-3.5 py-2.5 font-mono text-sm text-slate-900 placeholder:font-sans placeholder:text-slate-400 focus:border-[#1D5FA7] focus:outline-none focus:ring-2 focus:ring-[#1D5FA7]/20"
-                      />
-                      {fieldErrors.whatsappNumber && (
-                        <p className="mt-1.5 text-xs text-red-700">{fieldErrors.whatsappNumber}</p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Batch Selection */}
-                  <div>
-                    <label
-                      htmlFor="batchId"
-                      className="block text-sm font-medium text-[#0B1F3A]"
-                    >
-                      Batch Selection (ব্যাচ নির্বাচন) <span className="text-red-600">*</span>
-                    </label>
-                    <select
-                      id="batchId"
-                      value={batchId}
-                      onChange={(e) => setBatchId(e.target.value)}
-                      className="mt-1.5 block w-full rounded-md border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 focus:border-[#1D5FA7] focus:outline-none focus:ring-2 focus:ring-[#1D5FA7]/20"
-                    >
-                      {batches.map((b) => (
-                        <option key={b.id} value={b.id}>
-                          {b.name}
-                        </option>
-                      ))}
-                    </select>
-                    {fieldErrors.batchId && (
-                      <p className="mt-1.5 text-xs text-red-700">{fieldErrors.batchId}</p>
-                    )}
-                  </div>
-
-                  {/* Consent Checkbox */}
-                  <div className="rounded-md border border-slate-200 bg-slate-50 p-4">
-                    <label className="flex cursor-pointer items-start gap-3">
-                      <input
-                        type="checkbox"
-                        checked={consentAccepted}
-                        onChange={(e) => setConsentAccepted(e.target.checked)}
-                        className="mt-1 h-4 w-4 rounded border-slate-300 text-[#1D5FA7] focus:ring-[#1D5FA7]"
-                      />
-                      <span className="text-xs leading-relaxed text-slate-700">
-                        আমি নিশ্চিত করছি যে প্রদত্ত নাম, BCS Registration Number, WhatsApp Number ও ব্যাচের তথ্য সম্পূর্ণ সঠিক। অফিস থেকে পরিচয় ও পেমেন্ট যাচাই সম্পন্ন হওয়ার পর আমাকে অফিসিয়াল WhatsApp Group-এ যুক্ত করা হবে। (I confirm all submitted information is accurate and understand admin approval is mandatory.)
-                      </span>
-                    </label>
-                    {fieldErrors.consentAccepted && (
-                      <p className="mt-2 text-xs text-red-700">{fieldErrors.consentAccepted}</p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
-                  <p className="text-xs text-slate-500">
-                    All submissions enter manual review queue immediately.
-                  </p>
-                  <button
-                    type="submit"
-                    disabled={submitting}
-                    className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-md bg-[#1D5FA7] px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#164A84] disabled:opacity-60 whitespace-nowrap shrink-0"
-                  >
-                    {submitting ? 'Submitting...' : 'Submit Verification Information'}
-                  </button>
-                </div>
-              </form>
-            )}
+              </AnimatePresence>
+            </MotionConfig>
           </div>
         </div>
       </section>

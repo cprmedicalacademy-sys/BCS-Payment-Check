@@ -54,7 +54,7 @@ export const AdminExamsTab: React.FC<AdminExamsTabProps> = ({
   const [editingResultId, setEditingResultId] = useState<string | undefined>();
   const [rTitle, setRTitle] = useState('');
   const [rType, setRType] = useState<ExamResultType>('Subject Final Examination');
-  const [rBatch, setRBatch] = useState(batches[0]?.name || 'Special BCS Crystal Batch');
+  const [rBatch, setRBatch] = useState(batches[0]?.name || 'CPR SPECIAL BCS CRYSTAL BATCH');
   const [rDate, setRDate] = useState('');
   const [rSummary, setRSummary] = useState('');
   const [rFileName, setRFileName] = useState('');
@@ -176,7 +176,7 @@ export const AdminExamsTab: React.FC<AdminExamsTabProps> = ({
 
   const loadSampleCsv = () => {
     setRCsvRows(
-      'BCS Reg No,Candidate Name,Batch,Score (200),Merit Position\n46-102945,Dr. Ashraful Islam,Special BCS Crystal Batch,168.5,1\n46-104112,Dr. Tasnim Tabassum,Special BCS Crystal Batch,162.0,2'
+      'BCS Reg No,Candidate Name,Batch,Score (200),Merit Position\n26133362,Dr. Ashraful Islam,CPR SPECIAL BCS CRYSTAL BATCH,168.5,1\n26982415,Dr. Tasnim Tabassum,CPR SPECIAL BCS ONLINE BATCH,162.0,2'
     );
   };
 

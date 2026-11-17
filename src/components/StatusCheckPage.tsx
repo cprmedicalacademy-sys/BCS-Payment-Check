@@ -47,7 +47,7 @@ export const StatusCheckPage: React.FC<StatusCheckPageProps> = ({
   const [showCorrection, setShowCorrection] = useState(false);
   const [reqName, setReqName] = useState('');
   const [reqWhatsapp, setReqWhatsapp] = useState('');
-  const [reqBatch, setReqBatch] = useState(batches[0]?.name || 'Special BCS Crystal Batch');
+  const [reqBatch, setReqBatch] = useState(batches[0]?.name || 'CPR SPECIAL BCS CRYSTAL BATCH');
   const [reqNote, setReqNote] = useState('');
   const [reqSubmitting, setReqSubmitting] = useState(false);
   const [reqSuccess, setReqSuccess] = useState(false);
@@ -154,10 +154,12 @@ export const StatusCheckPage: React.FC<StatusCheckPageProps> = ({
             <input
               id="status-reg"
               type="text"
+              inputMode="numeric"
               required
               value={bcsRegNo}
               onChange={(e) => setBcsRegNo(e.target.value)}
-              placeholder="e.g. 46-102945"
+              placeholder="e.g. 26133362"
+              maxLength={40}
               className="mt-1.5 block w-full rounded-md border border-slate-300 bg-white px-3.5 py-2.5 font-mono text-sm text-slate-900 placeholder:font-sans placeholder:text-slate-400 focus:border-[#1D5FA7] focus:outline-none focus:ring-2 focus:ring-[#1D5FA7]/20"
             />
           </div>

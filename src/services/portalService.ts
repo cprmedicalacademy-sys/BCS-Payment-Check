@@ -90,8 +90,13 @@ export async function fetchAcademySettings(): Promise<AcademySettings> {
   }
 }
 
+const LEGACY_PLACEHOLDER_BATCH_IDS = new Set([
+  'special-bcs-crystal',
+  'bcs-exam-batch',
+  'other',
+]);
+
 export async function fetchActiveBatches(): Promise<BatchItem[]> {
-  const path = 'batches';
   try {
     const q = query(collection(db, 'batches'), where('isActive', '==', true));
     const snap = await getDocs(q);
@@ -99,6 +104,9 @@ export async function fetchActiveBatches(): Promise<BatchItem[]> {
       return DEFAULT_BATCHES;
     }
     const items = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<BatchItem, 'id'>) }));
+    if (items.every((item) => LEGACY_PLACEHOLDER_BATCH_IDS.has(item.id))) {
+      return DEFAULT_BATCHES;
+    }
     return items.sort((a, b) => a.sortOrder - b.sortOrder);
   } catch (error) {
     console.warn('Using default batches:', error);
@@ -157,7 +165,7 @@ export async function submitStudentRegistration(
   input: StudentRegistrationInput
 ): Promise<StudentRegistrationReceipt> {
   const regKey = normalizeRegKey(input.bcsRegNo);
-  if (regKey.length < 3 || regKey.length > 40) {
+  if (!/^\d{8}$/.test(regKey)) {
     throw new Error('INVALID_REG_NO');
   }
 
@@ -416,8 +424,16 @@ export async function seedDefaultsIfNeeded(adminUser: AdminUser): Promise<string
     }
 
     const batchesSnap = await getDocs(collection(db, 'batches'));
-    if (batchesSnap.empty) {
+    const onlyLegacyPlaceholderBatches =
+      !batchesSnap.empty &&
+      batchesSnap.docs.every((d) => LEGACY_PLACEHOLDER_BATCH_IDS.has(d.id));
+    if (batchesSnap.empty || onlyLegacyPlaceholderBatches) {
       const batchWrite = writeBatch(db);
+      if (onlyLegacyPlaceholderBatches) {
+        for (const legacyDoc of batchesSnap.docs) {
+          batchWrite.delete(doc(db, 'batches', legacyDoc.id));
+        }
+      }
       for (const b of DEFAULT_BATCHES) {
         batchWrite.set(doc(db, 'batches', b.id), {
           name: b.name,
@@ -441,7 +457,7 @@ export async function seedDefaultsIfNeeded(adminUser: AdminUser): Promise<string
         batchName: 'All Batches',
         examDate: 'Ongoing 2026',
         summary:
-          'All candidates enrolled in Special BCS Crystal Batch and BCS Exam Batch must complete verification through this portal. Approved candidates will receive Subject Final and Grand Mock Exam schedules and results via the restricted portal and official WhatsApp group.',
+          'All candidates enrolled in CPR Special BCS Online Batch, Crystal Exam Batch for Special BCS, CPR Special BCS Crystal Batch, and CPR BCS Special Batch must complete verification through this portal to receive Subject Final and Grand Mock Exam schedules and results.',
         attachmentName: '',
         attachmentUrl: '',
         visibility: 'public',

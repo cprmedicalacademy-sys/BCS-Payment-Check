@@ -236,6 +236,8 @@ export interface PortalSecuritySettings {
 }
 
 export const BOOTSTRAPPED_ADMIN_EMAIL = 'cprmedicalacademy@gmail.com';
+export const ADMIN_PANEL_PASSCODE_HASH =
+  'f42af67553a06d18888dfabf654af703ccd8f8db7067937d44a8b05ee61adba8';
 
 export const DEFAULT_LOGO_PATH = '/src/assets/images/cpr_academy_emblem_1794842637829.jpg';
 export const HERO_LECTURE_IMAGE = '/src/assets/images/hero_medical_lecture_1794842638985.jpg';
@@ -243,28 +245,36 @@ export const EXAM_HALL_IMAGE = '/src/assets/images/exam_prep_hall_1794842640796.
 
 export const DEFAULT_BATCHES: BatchItem[] = [
   {
-    id: 'special-bcs-crystal',
-    name: 'Special BCS Crystal Batch',
-    code: 'SBCS-CRYSTAL',
-    description: 'Comprehensive Special BCS Medical Cadre preparation batch with Subject Final & Grand Mock series.',
+    id: 'cpr-special-bcs-online',
+    name: 'CPR SPECIAL BCS ONLINE BATCH',
+    code: 'CPR-SBCS-ONLINE',
+    description: 'Online preparation cohort with Subject Final & Grand Mock exam updates.',
     isActive: true,
     sortOrder: 1,
   },
   {
-    id: 'bcs-exam-batch',
-    name: 'BCS Exam Batch',
-    code: 'BCS-EXAM',
-    description: 'Dedicated BCS Examination & Evaluation batch for regular mock assessments.',
+    id: 'crystal-exam-special-bcs',
+    name: 'CRYSTAL EXAM BATCH FOR SPECIAL BCS',
+    code: 'CRYSTAL-EXAM-SBCS',
+    description: 'Dedicated Crystal Exam Batch for Special BCS evaluations & merit lists.',
     isActive: true,
     sortOrder: 2,
   },
   {
-    id: 'other',
-    name: 'Other',
-    code: 'OTHER',
-    description: 'Other CPR Medical Academy BCS cohorts or legacy enrolled candidates.',
+    id: 'cpr-special-bcs-crystal',
+    name: 'CPR SPECIAL BCS CRYSTAL BATCH',
+    code: 'CPR-SBCS-CRYSTAL',
+    description: 'Comprehensive Special BCS Crystal Batch with full exam series & guidance.',
     isActive: true,
     sortOrder: 3,
+  },
+  {
+    id: 'cpr-bcs-special-batch',
+    name: 'CPR BCS Special Batch',
+    code: 'CPR-BCS-SPECIAL',
+    description: 'CPR Medical Academy BCS Special Batch verified student group.',
+    isActive: true,
+    sortOrder: 4,
   },
 ];
 

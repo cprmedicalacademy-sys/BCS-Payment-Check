@@ -238,6 +238,9 @@ export interface PortalSecuritySettings {
 export const BOOTSTRAPPED_ADMIN_EMAIL = 'cprmedicalacademy@gmail.com';
 export const ADMIN_PANEL_PASSCODE_HASH =
   'f42af67553a06d18888dfabf654af703ccd8f8db7067937d44a8b05ee61adba8';
+export const DEFAULT_GOOGLE_SHEET_ID = '1ZsWmwYmfbIVo1vPLLlfKOw7CBIfZk6-Omv7dkWNXomI';
+export const DEFAULT_GOOGLE_SHEET_URL =
+  'https://docs.google.com/spreadsheets/d/1ZsWmwYmfbIVo1vPLLlfKOw7CBIfZk6-Omv7dkWNXomI/edit';
 
 export const DEFAULT_LOGO_PATH = '/src/assets/images/cpr_academy_emblem_1794842637829.jpg';
 export const HERO_LECTURE_IMAGE = '/src/assets/images/hero_medical_lecture_1794842638985.jpg';

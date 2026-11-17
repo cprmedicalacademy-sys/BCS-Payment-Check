@@ -1,12 +1,12 @@
 {
-  "projectId": "enduring-code-t61jg",
-  "appId": "1:227456468599:web:da19535feef19a71d86872",
-  "apiKey": "AIzaSyA7UGpvY9Brv4fink_w8Pv76MPE5-CNCOc",
-  "authDomain": "enduring-code-t61jg.firebaseapp.com",
+  "projectId": "gen-lang-client-0063829851",
+  "appId": "1:932406286008:web:9982c8dd8a8ea11d76064d",
+  "apiKey": "AIzaSyDZoeQEJznJX8HTuCTnA5rxvtEb9ONXXtg",
+  "authDomain": "gen-lang-client-0063829851.firebaseapp.com",
   "firestoreDatabaseId": "ai-studio-1bec5b80-80cd-4c72-9cbc-d8266464d1b7",
-  "storageBucket": "enduring-code-t61jg.firebasestorage.app",
-  "messagingSenderId": "227456468599",
+  "storageBucket": "gen-lang-client-0063829851.firebasestorage.app",
+  "messagingSenderId": "932406286008",
   "measurementId": "",
-  "oAuthClientId": "227456468599-5j3f4nhnptsfmeaa58r2clbbu9fu212u.apps.googleusercontent.com",
+  "oAuthClientId": "932406286008-5m3gn6hle4uttj1lcj8u1bhb5p0ap3jd.apps.googleusercontent.com",
   "recaptchaSiteKey": ""
 }

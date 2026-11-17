@@ -1,13 +1,56 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider } from 'firebase/auth';
+import {
+  getAuth,
+  GoogleAuthProvider,
+  onAuthStateChanged,
+  signInWithPopup,
+  type User,
+} from 'firebase/auth';
 import { doc, getDocFromServer, getFirestore } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
+
+export const SCOPES = ['https://www.googleapis.com/auth/spreadsheets'] as const;
 
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
+for (const scope of SCOPES) {
+  googleProvider.addScope(scope);
+}
 googleProvider.setCustomParameters({ prompt: 'select_account' });
+
+// In-memory cache only (never stored in localStorage/sessionStorage)
+let cachedWorkspaceAccessToken: string | null = null;
+
+onAuthStateChanged(auth, (user) => {
+  if (!user) {
+    cachedWorkspaceAccessToken = null;
+  }
+});
+
+export function getWorkspaceAccessToken(): string | null {
+  return cachedWorkspaceAccessToken;
+}
+
+export function clearWorkspaceAccessToken(): void {
+  cachedWorkspaceAccessToken = null;
+}
+
+export async function signInWithGoogleWorkspace(): Promise<{
+  user: User;
+  accessToken: string | null;
+}> {
+  const result = await signInWithPopup(auth, googleProvider);
+  const credential = GoogleAuthProvider.credentialFromResult(result);
+  if (credential?.accessToken) {
+    cachedWorkspaceAccessToken = credential.accessToken;
+  }
+  return {
+    user: result.user,
+    accessToken: cachedWorkspaceAccessToken,
+  };
+}
 
 export enum OperationType {
   CREATE = 'create',
